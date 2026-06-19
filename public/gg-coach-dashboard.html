@@ -207,17 +207,47 @@
   <div class="modal-box">
     <div class="modal-title">Add New Client</div>
     <span class="m-label">Full Name</span>
-    <input class="m-input" type="text" id="new-name" placeholder="e.g. John Smith">
-    <span class="m-label">Weekly Budget ($)</span>
+    <input class="m-input" type="text" id="new-name" placeholder="e.g. John Smith" oninput="autoUsername()">
+    <span class="m-label">Username <span style="color:var(--muted);font-size:9px">(auto-filled, can edit)</span></span>
+    <input class="m-input" type="text" id="new-username" placeholder="e.g. johnsmith">
+    <span class="m-label">Password</span>
+    <input class="m-input" type="password" id="new-password" placeholder="Set a login password">
+    <span class="m-label">Weekly Budget ($) <span style="color:var(--muted);font-size:9px">(optional)</span></span>
     <input class="m-input" type="number" id="new-budget" placeholder="e.g. 1500">
-    <span class="m-label">Current Status</span>
-    <select class="m-select" id="new-status">
-      <option value="good">On Track</option>
-      <option value="risk">At Risk</option>
-      <option value="over">Over Budget</option>
-    </select>
-    <button class="m-save" onclick="saveNewClient()">Add Client</button>
+    <div id="add-client-error" style="color:#E05555;font-size:11px;margin-top:10px;display:none"></div>
+    <button class="m-save" id="add-save-btn" onclick="saveNewClient()">Add Client</button>
     <button class="m-close" onclick="closeAddModal()">✕ &nbsp; Close</button>
+  </div>
+</div>
+
+<!-- Change Own Password Modal -->
+<div class="modal-overlay" id="chpw-modal" onclick="if(event.target===this)closeChpwModal()">
+  <div class="modal-box">
+    <div class="modal-title">Change Password</div>
+    <span class="m-label">Current Password</span>
+    <input class="m-input" type="password" id="chpw-current" placeholder="Your current password">
+    <span class="m-label">New Password</span>
+    <input class="m-input" type="password" id="chpw-new" placeholder="New password">
+    <span class="m-label">Confirm New Password</span>
+    <input class="m-input" type="password" id="chpw-confirm" placeholder="Repeat new password">
+    <div id="chpw-error" style="color:#E05555;font-size:11px;margin-top:10px;display:none"></div>
+    <button class="m-save" id="chpw-save-btn" onclick="doChangePassword()">Update Password</button>
+    <button class="m-close" onclick="closeChpwModal()">✕ &nbsp; Close</button>
+  </div>
+</div>
+
+<!-- Reset Client Password Modal -->
+<div class="modal-overlay" id="reset-modal" onclick="if(event.target===this)closeResetModal()">
+  <div class="modal-box">
+    <div class="modal-title">Reset Client Password</div>
+    <div id="reset-client-label" style="font-size:12px;color:var(--muted);margin-bottom:12px"></div>
+    <span class="m-label">New Password</span>
+    <input class="m-input" type="password" id="reset-new" placeholder="Set a new password for this client">
+    <span class="m-label">Confirm Password</span>
+    <input class="m-input" type="password" id="reset-confirm" placeholder="Repeat the password">
+    <div id="reset-error" style="color:#E05555;font-size:11px;margin-top:10px;display:none"></div>
+    <button class="m-save" id="reset-save-btn" onclick="doResetClientPassword()">Reset Password</button>
+    <button class="m-close" onclick="closeResetModal()">✕ &nbsp; Close</button>
   </div>
 </div>
 
@@ -450,6 +480,7 @@ function openDetail(id) {
   html += '<a href="/gg-savings.html' + q + '" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 8px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:10px;color:#C9A84C;font-family:Inter,sans-serif;font-size:11px;font-weight:500;text-decoration:none;letter-spacing:0.04em">💰 Savings</a>';
   html += '</div>';
   html += '<button class="export-btn" onclick="alert(\'PDF report for ' + c.name + ' - coming soon!\')">📄 &nbsp; Export PDF Report</button>';
+  html += '<button class="export-btn" style="margin-top:8px" onclick="openResetModal(' + c.id + ',\'' + c.name.replace(/'/g,"\\'") + '\')">🔑 &nbsp; Reset Client Password</button>';
   html += '<button class="delete-btn" onclick="confirmDelete(' + c.id + ')">🗑 &nbsp; Remove This Client</button>';
 
   document.getElementById('detail-body').innerHTML = html;
@@ -537,24 +568,158 @@ function goBack() {
 }
 
 // Add client
-function openAddModal()  { document.getElementById('add-modal').classList.add('open'); }
+function autoUsername() {
+  var name = document.getElementById('new-name').value.trim();
+  var uField = document.getElementById('new-username');
+  uField.value = name.toLowerCase().replace(/\s+/g,'').replace(/[^a-z0-9]/g,'');
+}
+function openAddModal()  {
+  document.getElementById('add-modal').classList.add('open');
+  document.getElementById('new-name').focus();
+}
 function closeAddOut(e)  { if(e.target === document.getElementById('add-modal')) closeAddModal(); }
 function closeAddModal() {
   document.getElementById('add-modal').classList.remove('open');
-  document.getElementById('new-name').value   = '';
-  document.getElementById('new-budget').value = '';
+  document.getElementById('new-name').value     = '';
+  document.getElementById('new-username').value = '';
+  document.getElementById('new-password').value = '';
+  document.getElementById('new-budget').value   = '';
+  document.getElementById('add-client-error').style.display = 'none';
 }
 function saveNewClient() {
-  var name   = document.getElementById('new-name').value.trim();
-  var budget = parseFloat(document.getElementById('new-budget').value) || 1000;
-  if(!name) { alert('Please enter a client name.'); return; }
-  // New clients require a username/password — for now just alert
-  var username = name.toLowerCase().replace(/\s+/g,'') + Math.floor(Math.random()*900+100);
-  var password = 'client123';
+  var name     = document.getElementById('new-name').value.trim();
+  var username = document.getElementById('new-username').value.trim();
+  var password = document.getElementById('new-password').value;
+  var budget   = parseFloat(document.getElementById('new-budget').value) || 0;
+  var errEl    = document.getElementById('add-client-error');
+  errEl.style.display = 'none';
+
+  if (!name)     { errEl.textContent = 'Please enter the client\'s full name.'; errEl.style.display='block'; return; }
+  if (!username) { errEl.textContent = 'Please enter a username.'; errEl.style.display='block'; return; }
+  if (!password) { errEl.textContent = 'Please set a password for this client.'; errEl.style.display='block'; return; }
+  if (password.length < 4) { errEl.textContent = 'Password must be at least 4 characters.'; errEl.style.display='block'; return; }
+
+  var btn = document.getElementById('add-save-btn');
+  btn.disabled = true; btn.textContent = 'Adding...';
+
   fetch('/api/coach/clients', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({name, username, password, weekly_income: budget})
-  }).then(function(r){ if(r.ok) { closeAddModal(); loadClients(); } else { alert('Error creating client'); }});
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ name: name, username: username, password: password, weekly_income: budget })
+  }).then(function(r) {
+    btn.disabled = false; btn.textContent = 'Add Client';
+    if (r.ok) {
+      closeAddModal();
+      loadClients();
+    } else {
+      r.json().then(function(d) {
+        errEl.textContent = d.error || 'Error creating client.';
+        errEl.style.display = 'block';
+      });
+    }
+  }).catch(function() {
+    btn.disabled = false; btn.textContent = 'Add Client';
+    errEl.textContent = 'Network error — please try again.';
+    errEl.style.display = 'block';
+  });
+}
+
+// Change own password
+function openChpwModal() {
+  toggleUM();
+  document.getElementById('chpw-modal').classList.add('open');
+}
+function closeChpwModal() {
+  document.getElementById('chpw-modal').classList.remove('open');
+  document.getElementById('chpw-current').value = '';
+  document.getElementById('chpw-new').value     = '';
+  document.getElementById('chpw-confirm').value = '';
+  document.getElementById('chpw-error').style.display = 'none';
+}
+function doChangePassword() {
+  var cur  = document.getElementById('chpw-current').value;
+  var nw   = document.getElementById('chpw-new').value;
+  var conf = document.getElementById('chpw-confirm').value;
+  var errEl = document.getElementById('chpw-error');
+  errEl.style.display = 'none';
+  if (!cur || !nw || !conf) { errEl.textContent = 'Please fill in all fields.'; errEl.style.display='block'; return; }
+  if (nw !== conf)           { errEl.textContent = 'New passwords do not match.'; errEl.style.display='block'; return; }
+  if (nw.length < 4)         { errEl.textContent = 'Password must be at least 4 characters.'; errEl.style.display='block'; return; }
+  var btn = document.getElementById('chpw-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  fetch('/api/change-password', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ current_password: cur, new_password: nw })
+  }).then(function(r) {
+    btn.disabled = false; btn.textContent = 'Update Password';
+    if (r.ok) {
+      closeChpwModal();
+      showToast('✓ Password updated successfully');
+    } else {
+      r.json().then(function(d) { errEl.textContent = d.error || 'Error.'; errEl.style.display='block'; });
+    }
+  }).catch(function() {
+    btn.disabled = false; btn.textContent = 'Update Password';
+    errEl.textContent = 'Network error.'; errEl.style.display='block';
+  });
+}
+
+// Reset client password
+var resetTargetId = null;
+function openResetModal(id, name) {
+  resetTargetId = id;
+  document.getElementById('reset-client-label').textContent = 'Setting a new password for: ' + name;
+  document.getElementById('reset-new').value     = '';
+  document.getElementById('reset-confirm').value = '';
+  document.getElementById('reset-error').style.display = 'none';
+  document.getElementById('reset-modal').classList.add('open');
+}
+function closeResetModal() {
+  document.getElementById('reset-modal').classList.remove('open');
+  resetTargetId = null;
+}
+function doResetClientPassword() {
+  var nw   = document.getElementById('reset-new').value;
+  var conf = document.getElementById('reset-confirm').value;
+  var errEl = document.getElementById('reset-error');
+  errEl.style.display = 'none';
+  if (!nw || !conf) { errEl.textContent = 'Please fill in both fields.'; errEl.style.display='block'; return; }
+  if (nw !== conf)  { errEl.textContent = 'Passwords do not match.'; errEl.style.display='block'; return; }
+  if (nw.length < 4){ errEl.textContent = 'Password must be at least 4 characters.'; errEl.style.display='block'; return; }
+  var btn = document.getElementById('reset-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  fetch('/api/coach/clients/' + resetTargetId + '/password', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ password: nw })
+  }).then(function(r) {
+    btn.disabled = false; btn.textContent = 'Reset Password';
+    if (r.ok) {
+      closeResetModal();
+      showToast('✓ Client password reset');
+    } else {
+      r.json().then(function(d) { errEl.textContent = d.error || 'Error.'; errEl.style.display='block'; });
+    }
+  }).catch(function() {
+    btn.disabled = false; btn.textContent = 'Reset Password';
+    errEl.textContent = 'Network error.'; errEl.style.display='block';
+  });
+}
+
+// Toast notification
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast';
+    t.style.cssText = 'position:fixed;bottom:32px;left:50%;transform:translateX(-50%) translateY(20px);background:#1A5C2E;color:#F0EDE8;padding:12px 22px;border-radius:10px;font-size:12px;font-weight:600;letter-spacing:0.06em;z-index:999;opacity:0;transition:all 0.3s ease;pointer-events:none;white-space:nowrap';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  t.style.transform = 'translateX(-50%) translateY(0)';
+  setTimeout(function() { t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(20px)'; }, 2800);
 }
 
 // Delete client
@@ -713,6 +878,7 @@ animate();
     </div>
     <div style="height:1px;background:rgba(201,168,76,0.1);margin-bottom:16px"></div>
     <button id="umThemeBtn" onclick="toggleTheme()" style="width:100%;padding:13px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.15);border-radius:10px;color:#C9A84C;font-family:Inter,sans-serif;font-size:13px;font-weight:500;cursor:pointer;letter-spacing:0.04em;margin-bottom:8px">☀️  Light Mode</button>
+    <button onclick="openChpwModal()" style="width:100%;padding:13px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.15);border-radius:10px;color:#C9A84C;font-family:Inter,sans-serif;font-size:13px;font-weight:500;cursor:pointer;letter-spacing:0.04em;margin-bottom:8px">🔑 &nbsp;Change Password</button>
     <button onclick="doLogout()" style="width:100%;padding:13px;background:rgba(139,26,26,0.12);border:1px solid rgba(255,107,107,0.2);border-radius:10px;color:#FF6B6B;font-family:Inter,sans-serif;font-size:13px;font-weight:500;cursor:pointer;letter-spacing:0.04em">↩ &nbsp;Sign Out</button>
   </div>
 </div>

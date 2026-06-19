@@ -624,6 +624,31 @@ app.delete('/api/coach/clients/:id', requireCoach, (req, res) => {
   res.json({ ok: true });
 });
 
+// Reset a client's password (coach only)
+app.put('/api/coach/clients/:id/password', requireCoach, (req, res) => {
+  const { password } = req.body;
+  if (!password || password.length < 4) return res.status(400).json({ error: 'Password must be at least 4 characters' });
+  const hash = bcrypt.hashSync(password, 10);
+  const r = db.prepare("UPDATE users SET password_hash=? WHERE id=? AND role='client'").run(hash, req.params.id);
+  if (r.changes === 0) return res.status(404).json({ error: 'Client not found' });
+  res.json({ ok: true });
+});
+
+// Change own password (any logged-in user)
+app.put('/api/change-password', requireAuth, (req, res) => {
+  const { current_password, new_password } = req.body;
+  if (!current_password || !new_password) return res.status(400).json({ error: 'Missing fields' });
+  if (new_password.length < 4) return res.status(400).json({ error: 'New password must be at least 4 characters' });
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (!bcrypt.compareSync(current_password, user.password_hash)) {
+    return res.status(401).json({ error: 'Current password is incorrect' });
+  }
+  const hash = bcrypt.hashSync(new_password, 10);
+  db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hash, req.session.userId);
+  res.json({ ok: true });
+});
+
 // ─── Summary / analytics ──────────────────────────────────────────────────────
 app.get('/api/summary', requireAuth, (req, res) => {
   const clientId = getClientId(req);
