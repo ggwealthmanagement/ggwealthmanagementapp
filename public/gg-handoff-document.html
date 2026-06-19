@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G&G Wealth Management — App Handoff Document</title>
+<link href="https://fonts.googleapis.com/css2?family=Alex+Brush&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root {
+    --black:#080808; --card:#111111;
+    --gold:#C9A84C; --gold-light:#E2C472; --gold-dim:#7A6230;
+    --white:#F0EDE8; --muted:#5A5550; --border:rgba(201,168,76,0.15);
+    --green:#3DAA68; --red:#8B1A1A;
+  }
+  html,body { background:var(--black); font-family:'Inter',sans-serif; color:var(--white); min-height:100vh; }
+
+  /* Print styles */
+  @media print {
+    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    body { background:#fff !important; color:#1A1A1A !important; }
+    .no-print { display:none !important; }
+    .page-break { page-break-before:always; }
+    @page { margin:20mm; size:A4; }
+    .section { background:#fff !important; border:1px solid #E8E4DC !important; }
+    .section-title { color:#C9A84C !important; }
+    h1,h2,h3 { color:#1A1A1A !important; }
+    p, li { color:#3A3A3A !important; }
+    .tag { background:#F8F6F2 !important; color:#7A6230 !important; border-color:#E8E4DC !important; }
+    .color-swatch { border:1px solid #E8E4DC !important; }
+    .highlight { background:#FEF9EC !important; border-color:#E8D06A !important; }
+    .screen-row { border-bottom:1px solid #E8E4DC !important; }
+    .status-done { color:#065F46 !important; }
+    .status-dev  { color:#92400E !important; }
+  }
+
+  .shell { max-width:860px; margin:0 auto; padding:48px 32px 80px; }
+
+  /* Cover */
+  .cover { text-align:center; padding:60px 0 48px; border-bottom:1px solid var(--border); margin-bottom:48px; }
+  .cover-script { font-family:'Alex Brush',cursive; font-size:80px; color:var(--gold); text-shadow:0 0 40px rgba(201,168,76,0.2); line-height:1; margin-bottom:10px; }
+  .cover-sub    { font-size:11px; letter-spacing:0.32em; text-transform:uppercase; color:var(--gold-dim); margin-bottom:28px; }
+  .cover-doc    { display:inline-block; background:rgba(201,168,76,0.08); border:1px solid rgba(201,168,76,0.25); border-radius:8px; font-size:11px; font-weight:600; letter-spacing:0.2em; text-transform:uppercase; color:var(--gold); padding:8px 20px; margin-bottom:24px; }
+  .cover-meta   { font-size:12px; color:var(--muted); line-height:2; }
+  .cover-meta strong { color:var(--white); }
+
+  /* Print button */
+  .print-btn { display:block; margin:24px auto 0; background:linear-gradient(135deg,#B8923E,#E2C472,#B8923E); background-size:200%; border:none; border-radius:10px; color:#080808; cursor:pointer; font-family:'Inter',sans-serif; font-size:11px; font-weight:700; letter-spacing:0.22em; text-transform:uppercase; padding:14px 32px; animation:shimmer 3s ease-in-out infinite; }
+  @keyframes shimmer { 0%,100%{background-position:0%} 50%{background-position:100%} }
+
+  /* Sections */
+  .section { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:28px 32px; margin-bottom:24px; }
+  .section-title { font-size:9px; font-weight:700; letter-spacing:0.28em; text-transform:uppercase; color:var(--gold); margin-bottom:18px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+  .section-subtitle { font-size:13px; font-weight:600; color:var(--white); margin-bottom:8px; margin-top:18px; }
+  .section-subtitle:first-of-type { margin-top:0; }
+
+  p { font-size:13px; color:var(--muted); line-height:1.8; margin-bottom:10px; }
+  p strong { color:var(--white); }
+
+  ul, ol { padding-left:20px; margin-bottom:10px; }
+  li { font-size:13px; color:var(--muted); line-height:1.9; }
+  li strong { color:var(--white); }
+
+  /* Tags */
+  .tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .tag  { font-size:9px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; padding:3px 10px; border-radius:20px; background:rgba(201,168,76,0.08); border:1px solid rgba(201,168,76,0.18); color:var(--gold-dim); }
+
+  /* Color swatches */
+  .color-grid { display:flex; flex-wrap:wrap; gap:12px; margin-top:10px; }
+  .color-item { display:flex; align-items:center; gap:10px; }
+  .color-swatch { width:36px; height:36px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); flex-shrink:0; }
+  .color-info .color-name { font-size:12px; font-weight:600; color:var(--white); }
+  .color-info .color-hex  { font-size:10px; color:var(--muted); font-family:monospace; }
+  .color-info .color-use  { font-size:10px; color:var(--muted); }
+
+  /* Screen list */
+  .screen-list { display:flex; flex-direction:column; }
+  .screen-row  { display:grid; grid-template-columns:28px 180px 1fr auto; align-items:start; gap:16px; padding:14px 0; border-bottom:1px solid rgba(255,255,255,0.04); }
+  .screen-row:last-child { border-bottom:none; }
+  .sr-num   { font-size:11px; font-weight:700; color:var(--gold-dim); padding-top:1px; }
+  .sr-name  { font-size:13px; font-weight:600; color:var(--white); }
+  .sr-file  { font-size:10px; color:var(--muted); font-family:monospace; margin-top:3px; }
+  .sr-desc  { font-size:12px; color:var(--muted); line-height:1.7; }
+  .sr-status { font-size:9px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; padding:3px 8px; border-radius:4px; white-space:nowrap; }
+  .status-done { background:rgba(26,92,46,0.2); color:var(--green); }
+  .status-dev  { background:rgba(201,168,76,0.12); color:var(--gold); }
+
+  /* Highlight box */
+  .highlight { background:rgba(201,168,76,0.06); border:1px solid rgba(201,168,76,0.2); border-left:3px solid var(--gold); border-radius:0 10px 10px 0; padding:14px 18px; margin:12px 0; }
+  .highlight p { margin:0; color:var(--white); font-size:12px; line-height:1.7; }
+
+  /* Two column */
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+
+  /* Feature table */
+  .feat-table { width:100%; border-collapse:collapse; margin-top:8px; }
+  .feat-table th { font-size:9px; letter-spacing:0.16em; text-transform:uppercase; color:var(--gold-dim); padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); }
+  .feat-table td { font-size:12px; color:var(--muted); padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.03); vertical-align:top; }
+  .feat-table td strong { color:var(--white); }
+  .feat-table tr:last-child td { border-bottom:none; }
+  .check { color:var(--green); font-weight:700; }
+  .pending { color:var(--gold); font-weight:700; }
+
+  /* Code block */
+  .code-block { background:#0A0A0A; border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:16px 18px; font-family:monospace; font-size:12px; color:#A8C4A8; line-height:1.8; margin:10px 0; overflow-x:auto; }
+
+  /* Page break hint */
+  .page-break { margin:40px 0 0; padding-top:40px; border-top:1px solid var(--border); }
+
+  @media(max-width:600px) {
+    .shell { padding:24px 16px 60px; }
+    .screen-row { grid-template-columns:24px 1fr; }
+    .sr-status { display:none; }
+    .two-col { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Cover -->
+  <div class="cover">
+    <div class="cover-script">G&amp;G</div>
+    <div class="cover-sub">Wealth Management</div>
+    <div class="cover-doc">App Development Handoff Document</div>
+    <div class="cover-meta">
+      <strong>Company:</strong> G&amp;G Wealth Management<br>
+      <strong>Founders:</strong> Gustavo &amp; Greys<br>
+      <strong>Document Type:</strong> Complete App Prototype Handoff<br>
+      <strong>Prepared:</strong> June 2026<br>
+      <strong>Status:</strong> Prototype Complete — Ready for Backend Development
+    </div>
+    <button class="print-btn no-print" onclick="window.print()">📄 &nbsp; Print / Save as PDF</button>
+  </div>
+
+  <!-- 1. Project Overview -->
+  <div class="section">
+    <div class="section-title">01 · Project Overview</div>
+
+    <div class="section-subtitle">What We're Building</div>
+    <p>G&amp;G Wealth Management is a <strong>personal budgeting app</strong> designed to help paycheck-to-paycheck clients build financial confidence through simple, visual budget tracking — with direct coach oversight from Gustavo &amp; Greys.</p>
+
+    <div class="section-subtitle">The Problem It Solves</div>
+    <p>Most budgeting apps are built for people who already have good financial habits. G&amp;G is built for people who are <strong>starting from zero</strong> — living paycheck to paycheck — and need a system that builds confidence gradually, with a real human coach guiding them every step of the way.</p>
+
+    <div class="section-subtitle">Two-Sided App</div>
+    <p>The app has two distinct sides:</p>
+    <ul>
+      <li><strong>Client App (Mobile)</strong> — what clients use daily to log expenses, track debts, save money, and message their coach</li>
+      <li><strong>Coach Dashboard (Web/Desktop)</strong> — what Gustavo &amp; Greys use to monitor all clients, send coaching notes, and export PDF reports</li>
+    </ul>
+
+    <div class="section-subtitle">Target Clients</div>
+    <p>Paycheck-to-paycheck individuals who want to <strong>break the cycle</strong>, build an emergency fund, eliminate debt using the Debt Snowball Method, and develop lasting financial discipline — with a coach in their corner.</div>
+  </div>
+
+  <!-- 2. Brand & Design -->
+  <div class="section">
+    <div class="section-title">02 · Brand &amp; Design System</div>
+
+    <div class="section-subtitle">Brand Identity</div>
+    <div class="color-grid">
+      <div class="color-item">
+        <div class="color-swatch" style="background:#080808;border-color:rgba(255,255,255,0.15)"></div>
+        <div class="color-info"><div class="color-name">Deep Black</div><div class="color-hex">#080808</div><div class="color-use">Primary background</div></div>
+      </div>
+      <div class="color-item">
+        <div class="color-swatch" style="background:#111111"></div>
+        <div class="color-info"><div class="color-name">Charcoal</div><div class="color-hex">#111111</div><div class="color-use">Card background</div></div>
+      </div>
+      <div class="color-item">
+        <div class="color-swatch" style="background:#C9A84C"></div>
+        <div class="color-info"><div class="color-name">Gold</div><div class="color-hex">#C9A84C</div><div class="color-use">Primary accent, brand color</div></div>
+      </div>
+      <div class="color-item">
+        <div class="color-swatch" style="background:#E2C472"></div>
+        <div class="color-info"><div class="color-name">Gold Light</div><div class="color-hex">#E2C472</div><div class="color-use">Highlights, key numbers</div></div>
+      </div>
+      <div class="color-item">
+        <div class="color-swatch" style="background:#F0EDE8"></div>
+        <div class="color-info"><div class="color-name">Cream White</div><div class="color-hex">#F0EDE8</div><div class="color-use">Body text</div></div>
+      </div>
+    </div>
+
+    <div class="section-subtitle" style="margin-top:20px">Budget Ring Colors</div>
+    <div class="color-grid">
+      <div class="color-item">
+        <div class="color-swatch" style="background:#8B1A1A"></div>
+        <div class="color-info"><div class="color-name">Dark Red</div><div class="color-hex">#8B1A1A</div><div class="color-use">Debt Payoff ring (outermost)</div></div>
+      </div>
+      <div class="color-item">
+        <div class="color-swatch" style="background:#1A5C2E"></div>
+        <div class="color-info"><div class="color-name">Dark Green</div><div class="color-hex">#1A5C2E</div><div class="color-use">Savings ring</div></div>
+      </div>
+      <div class="color-item">
+        <div class="color-swatch" style="background:#C8B48A"></div>
+        <div class="color-info"><div class="color-name">Sand</div><div class="color-hex">#C8B48A</div><div class="color-use">Wants ring</div></div>
+      </div>
+      <div class="color-item">
+        <div class="color-swatch" style="background:#C97A2A"></div>
+        <div class="color-info"><div class="color-name">Muted Orange</div><div class="color-hex">#C97A2A</div><div class="color-use">Fixed ring (innermost)</div></div>
+      </div>
+    </div>
+
+    <div class="section-subtitle" style="margin-top:20px">Typography</div>
+    <ul>
+      <li><strong>Alex Brush</strong> — Script font for G&amp;G brand name, screen titles, and decorative headers</li>
+      <li><strong>Inter</strong> — Clean sans-serif for all body text, numbers, labels, and UI elements</li>
+    </ul>
+
+    <div class="section-subtitle">Design Feel</div>
+    <ul>
+      <li><strong>Dark mode by default</strong> — black background, gold accents throughout</li>
+      <li><strong>Premium &amp; trustworthy</strong> — feels like a private wealth management firm, not a generic app</li>
+      <li><strong>Gold sparkle animation</strong> — subtle twinkling particles on every screen background</li>
+      <li><strong>Shimmer buttons</strong> — gold gradient buttons with sweeping light animation</li>
+      <li><strong>Subtle celebrations</strong> — classy gold shimmer when goals or debts are paid off (no confetti)</li>
+    </ul>
+
+    <div class="tags">
+      <span class="tag">Dark Mode Default</span>
+      <span class="tag">Gold Sparkles</span>
+      <span class="tag">Alex Brush Script</span>
+      <span class="tag">Shimmer Buttons</span>
+      <span class="tag">Premium Feel</span>
+    </div>
+  </div>
+
+  <!-- 3. App Architecture -->
+  <div class="section page-break">
+    <div class="section-title">03 · App Architecture</div>
+
+    <div class="section-subtitle">Budget Categories (The 4 Rings)</div>
+    <p>The core of the app is a <strong>4-ring budget system</strong> inspired by fitness tracker rings. From outermost to innermost:</p>
+    <ol>
+      <li><strong>Debt Payoff</strong> (Dark Red #8B1A1A) — outermost, largest ring</li>
+      <li><strong>Savings</strong> (Dark Green #1A5C2E) — second ring</li>
+      <li><strong>Wants</strong> (Sand #C8B48A) — third ring</li>
+      <li><strong>Fixed</strong> (Muted Orange #C97A2A) — innermost, smallest ring</li>
+    </ol>
+
+    <div class="highlight"><p>⚠️ <strong>Important naming:</strong> What most apps call "Needs" is called <strong>"Fixed"</strong> in this app — representing fixed monthly expenses like mortgage, car payment, phone bill, etc.</p></div>
+
+    <div class="section-subtitle">Budget Styles (Onboarding)</div>
+    <p>Clients choose a budget style during onboarding with their coach:</p>
+    <ul>
+      <li><strong>Aggressive Saver</strong> — maximum toward debt and savings</li>
+      <li><strong>Balanced</strong> — even split across categories</li>
+      <li><strong>Gentle Start</strong> — easier entry point for beginners</li>
+      <li><strong>Custom</strong> — fully adjustable sliders per category</li>
+    </ul>
+
+    <div class="section-subtitle">Income Model</div>
+    <ul>
+      <li>Income is entered <strong>manually each week</strong> — clients enter their paycheck amount</li>
+      <li>Budget rings recalculate automatically based on income and chosen budget style</li>
+      <li>Monthly budget is used for Fixed expenses only (not weekly)</li>
+    </ul>
+
+    <div class="section-subtitle">Fixed Expenses Logic</div>
+    <ul>
+      <li>Clients enter fixed monthly bills <strong>once</strong> (mortgage, electric, phone, car, etc.)</li>
+      <li>Bills persist automatically — no re-entry needed each month</li>
+      <li>Clients <strong>check off</strong> each bill as paid</li>
+      <li>When checked off, the bill <strong>auto-posts to the Daily Log</strong> for that day</li>
+      <li>Unchecking removes it from the log</li>
+    </ul>
+
+    <div class="section-subtitle">Debt Snowball Method</div>
+    <ul>
+      <li>Clients enter each debt individually with name, type, total balance, amount already paid, and minimum monthly payment</li>
+      <li>Debts are <strong>auto-sorted smallest to largest</strong> remaining balance</li>
+      <li>First unpaid debt is marked as the <strong>🎯 Target</strong></li>
+      <li>When a debt hits zero — subtle gold shimmer celebration screen appears</li>
+      <li>Clients can add, edit, or delete debts at any time</li>
+    </ul>
+
+    <div class="section-subtitle">Streak System</div>
+    <p>Two simultaneous streaks are tracked and displayed:</p>
+    <ul>
+      <li><strong>🔥 Days Logged</strong> — consecutive days the client logged at least one expense</li>
+      <li><strong>✅ Days On Track</strong> — consecutive days the client stayed under budget in all categories</li>
+    </ul>
+  </div>
+
+  <!-- 4. Screens -->
+  <div class="section">
+    <div class="section-title">04 · All Screens Built</div>
+
+    <div class="screen-list">
+
+      <div class="screen-row">
+        <div class="sr-num">01</div>
+        <div><div class="sr-name">Login Screen</div><div class="sr-file">gg-login.html</div></div>
+        <div class="sr-desc">G&amp;G script logo in Alex Brush font, gold sparkle background animation, username/password fields, shimmering gold Sign In button, "Contact your coach" link. Dark mode default.</div>
+        <div class="sr-status status-done">Complete</div>
+      </div>
+
+      <div class="screen-row">
+        <div class="sr-num">02</div>
+        <div><div class="sr-name">Home Screen</div><div class="sr-file">gg-home.html</div></div>
+        <div class="sr-desc">4 concentric budget rings (Debt/Savings/Wants/Fixed), weekly income entry with modal, dual streak badges, emergency fund & debt quick stat cards, weekly summary teaser, bottom navigation bar.</div>
+        <div class="sr-status status-done">Complete</div>
+      </div>
+
+      <div class="screen-row">
+        <div class="sr-num">03</div>
+        <div><div class="sr-name">Daily Log</div><div class="sr-file">gg-daily-log.html</div></div>
+        <div class="sr-desc">5 filter tabs (All / Fixed / Wants / Savings / Debt). Budget mini-bars. Real-time expense entry with category selector. Fixed tab shows monthly bills with checkbox to mark paid — auto-posts to log. Add/delete fixed expenses.</div>
+        <div class="sr-status status-done">Complete</div>
+      </div>
+
+      <div class="screen-row">
+        <div class="sr-num">04</div>
+        <div><div class="sr-name">Debt Snowball</div><div class="sr-file">gg-debt-tracker.html</div></div>
+        <div class="sr-desc">All debts auto-sorted smallest to largest. Summary bar showing total debt (red), total paid (green), debts remaining. Progress bars per debt, projected payoff dates, Log Payment button, gold celebration screen on payoff. Click card to edit or delete. Add new debts via + button.</div>
+        <div class="sr-status status-done">Complete</div>
+      </div>
+
+      <div class="screen-row">
+        <div class="sr-num">05</div>
+        <div><div class="sr-name">Savings &amp; Goals</div><div class="sr-file">gg-savings.html</div></div>
+        <div class="sr-desc">Total savings hero number. Weekly/monthly stats and goals met counter. Emergency Fund as priority goal (default $1,000, fully customizable). Unlimited custom savings goals with weekly contributions and projected completion dates. Tap to edit or delete any goal. Celebration on goal completion.</div>
+        <div class="sr-status status-done">Complete</div>
+      </div>
+
+      <div class="screen-row">
+        <div class="sr-num">06</div>
+        <div><div class="sr-name">Weekly Summary</div><div class="sr-file">gg-weekly-summary.html</div></div>
+        <div class="sr-desc">Period tabs (Weekly / Monthly / Quarterly) — all data updates on switch. Budget score ring (0-100). 4 stat boxes. Category breakdown table. Day-by-day spending bar chart. Top 5 expenses. Wins &amp; Focus On two-column section. Interactive progress chart showing spending, savings, and debt trends over time.</div>
+        <div class="sr-status status-done">Complete</div>
+      </div>
+
+      <div class="screen-row">
+        <div class="sr-num">07</div>
+        <div><div class="sr-name">My Coach</div><div class="sr-file">gg-advisor.html</div></div>
+        <div class="sr-desc">Coach profile card (Gustavo &amp; Greys) with active status indicator. Pinned welcome note at top. Two-way message thread — coach messages left, client messages right. Live message entry and send. Gold shimmer send button. No auto-responses — coach replies manually from dashboard.</div>
+        <div class="sr-status status-done">Complete</div>
+      </div>
+
+      <div class="screen-row">
+        <div class="sr-num">08</div>
+        <div><div class="sr-name">Coach Dashboard</div><div class="sr-file">gg-coach-dashboard.html</div></div>
+        <div class="sr-desc">Web/desktop coach-only interface. Client list sorted by priority (Over Budget → At Risk → On Track). Tap client → slides into full detail screen with stats, category bars, recent activity, and coaching notes thread. Send notes to clients. Add new clients. Remove clients with confirmation. PDF export per client.</div>
+        <div class="sr-status status-done">Complete</div>
+      </div>
+
+      <div class="screen-row">
+        <div class="sr-num">09</div>
+        <div><div class="sr-name">PDF Report Generator</div><div class="sr-file">gg-pdf-report.html</div></div>
+        <div class="sr-desc">Branded G&amp;G Wealth Management printable reports. Enter client name, select period (Weekly/Monthly/Quarterly), set status, add personal coach note. Generates full report with budget summary, category table, spending chart, debt progress, savings goals, wins &amp; focus areas, score, and confidential footer. Print to PDF via browser.</div>
+        <div class="sr-status status-done">Complete</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 5. What Needs Backend -->
+  <div class="section page-break">
+    <div class="section-title">05 · Backend Development Requirements</div>
+
+    <p>The prototype is <strong>fully functional as a UI demo</strong>. To make it a real working app used by real clients, the following backend infrastructure is needed:</p>
+
+    <div class="section-subtitle">Authentication</div>
+    <ul>
+      <li>Real username &amp; password login system</li>
+      <li>Separate client and coach account types</li>
+      <li>Password reset / forgot password flow</li>
+      <li>Session management — stay logged in</li>
+      <li><strong>Recommended:</strong> Firebase Authentication</li>
+    </ul>
+
+    <div class="section-subtitle">Database</div>
+    <ul>
+      <li>Store all client data — expenses, income, debts, savings goals, fixed bills</li>
+      <li>Store all coach notes and client messages</li>
+      <li>Real-time sync — client logs expense, coach dashboard updates instantly</li>
+      <li><strong>Recommended:</strong> Firebase Firestore (real-time) or Supabase</li>
+    </ul>
+
+    <div class="section-subtitle">Data Structure (per client)</div>
+    <div class="code-block">
+clients/{clientId}
+  ├── profile: { name, email, coachId, createdAt }
+  ├── budget:  { weeklyIncome, style, ringPercentages }
+  ├── expenses/{expenseId}: { amount, category, desc, timestamp }
+  ├── fixedExpenses/{id}: { name, amount, due, paid, paidDate }
+  ├── debts/{debtId}: { name, type, balance, paid, min, paidOff }
+  ├── savings/{goalId}: { name, goal, current, weekly, complete }
+  ├── emergencyFund: { current, goal }
+  ├── streaks: { logged, onTrack, lastLogDate }
+  └── messages/{msgId}: { from, text, timestamp }
+    </div>
+
+    <div class="section-subtitle">Real-Time Coach Dashboard</div>
+    <ul>
+      <li>Coach dashboard listens to all client data in real time</li>
+      <li>When a client logs an expense — it appears on coach dashboard instantly</li>
+      <li>Unread message dots update in real time</li>
+      <li>Client status (On Track / At Risk / Over Budget) recalculates automatically</li>
+      <li>Coach can see which clients are currently active in the app</li>
+    </ul>
+
+    <div class="section-subtitle">Messaging System</div>
+    <ul>
+      <li>Real-time two-way messaging between coach and each client</li>
+      <li>Push notification when coach sends a note (future feature)</li>
+      <li>Message history stored permanently per client</li>
+    </ul>
+
+    <div class="section-subtitle">PDF Reports</div>
+    <ul>
+      <li>Currently works via browser print — functional for now</li>
+      <li>Future upgrade: server-side PDF generation (Puppeteer or similar) for one-click download</li>
+    </ul>
+
+    <div class="section-subtitle">Hosting &amp; Deployment</div>
+    <ul>
+      <li><strong>Client App:</strong> Wrap as iOS &amp; Android app using React Native or Capacitor</li>
+      <li><strong>Coach Dashboard:</strong> Deploy as web app — Firebase Hosting or Vercel</li>
+      <li><strong>App Store:</strong> Submit to Apple App Store and Google Play Store</li>
+    </ul>
+
+    <div class="highlight">
+      <p>💡 <strong>Recommended Tech Stack:</strong> React Native (mobile) + Firebase (auth + database + hosting). This is the fastest path to a production app using the prototype as a complete design reference. All screens, colors, logic, and features are already decided — the developer only needs to wire up the backend.</p>
+    </div>
+  </div>
+
+  <!-- 6. Feature Checklist -->
+  <div class="section">
+    <div class="section-title">06 · Complete Feature Checklist</div>
+
+    <table class="feat-table">
+      <thead>
+        <tr><th>Feature</th><th>Status</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Login Screen</strong></td><td><span class="check">✓ Built</span></td><td>UI complete, needs real auth backend</td></tr>
+        <tr><td><strong>4-Ring Budget Home Screen</strong></td><td><span class="check">✓ Built</span></td><td>All rings, colors, animations done</td></tr>
+        <tr><td><strong>Weekly Income Entry</strong></td><td><span class="check">✓ Built</span></td><td>Manual weekly input with modal</td></tr>
+        <tr><td><strong>Daily Expense Logging</strong></td><td><span class="check">✓ Built</span></td><td>Real-time entry, category selection</td></tr>
+        <tr><td><strong>Fixed Expenses System</strong></td><td><span class="check">✓ Built</span></td><td>Monthly bills, checkbox to post to log</td></tr>
+        <tr><td><strong>Debt Snowball Tracker</strong></td><td><span class="check">✓ Built</span></td><td>Auto-sorted, payments, celebration</td></tr>
+        <tr><td><strong>Emergency Fund</strong></td><td><span class="check">✓ Built</span></td><td>$1,000 default, customizable</td></tr>
+        <tr><td><strong>Custom Savings Goals</strong></td><td><span class="check">✓ Built</span></td><td>Unlimited goals, projected dates</td></tr>
+        <tr><td><strong>Dual Streak System</strong></td><td><span class="check">✓ Built</span></td><td>Days logged + days on track</td></tr>
+        <tr><td><strong>Weekly / Monthly / Quarterly Summary</strong></td><td><span class="check">✓ Built</span></td><td>Score, chart, breakdown, wins</td></tr>
+        <tr><td><strong>Progress Chart</strong></td><td><span class="check">✓ Built</span></td><td>Spending, savings &amp; debt trend lines</td></tr>
+        <tr><td><strong>Coach Corner Messaging</strong></td><td><span class="check">✓ Built</span></td><td>Two-way, pinned note, live send</td></tr>
+        <tr><td><strong>Coach Dashboard</strong></td><td><span class="check">✓ Built</span></td><td>Triage sort, detail view, notes</td></tr>
+        <tr><td><strong>Add / Remove Clients</strong></td><td><span class="check">✓ Built</span></td><td>Full CRUD from coach dashboard</td></tr>
+        <tr><td><strong>PDF Reports (Weekly/Monthly/Quarterly)</strong></td><td><span class="check">✓ Built</span></td><td>Browser print, branded, coach notes</td></tr>
+        <tr><td><strong>Budget Style Selector</strong></td><td><span class="pending">◐ Partial</span></td><td>Macros calculator designed, onboarding TBD</td></tr>
+        <tr><td><strong>Real Authentication</strong></td><td><span class="pending">○ Needs Dev</span></td><td>Firebase Auth recommended</td></tr>
+        <tr><td><strong>Live Database Sync</strong></td><td><span class="pending">○ Needs Dev</span></td><td>Firebase Firestore recommended</td></tr>
+        <tr><td><strong>Real-Time Coach Dashboard</strong></td><td><span class="pending">○ Needs Dev</span></td><td>Firestore listeners</td></tr>
+        <tr><td><strong>App Store Submission</strong></td><td><span class="pending">○ Needs Dev</span></td><td>React Native + Capacitor</td></tr>
+        <tr><td><strong>Push Notifications</strong></td><td><span class="pending">○ Future</span></td><td>Firebase Cloud Messaging</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 7. Files Delivered -->
+  <div class="section">
+    <div class="section-title">07 · Files Delivered in This Prototype</div>
+
+    <div class="two-col">
+      <div>
+        <div class="section-subtitle">Client App Files</div>
+        <ul>
+          <li><strong>gg-login.html</strong> — Login screen</li>
+          <li><strong>gg-home.html</strong> — Home / budget rings</li>
+          <li><strong>gg-daily-log.html</strong> — Daily log + fixed expenses</li>
+          <li><strong>gg-debt-tracker.html</strong> — Debt snowball</li>
+          <li><strong>gg-savings.html</strong> — Savings &amp; goals</li>
+          <li><strong>gg-advisor.html</strong> — Coach corner messaging</li>
+          <li><strong>gg-weekly-summary.html</strong> — Weekly summary</li>
+        </ul>
+      </div>
+      <div>
+        <div class="section-subtitle">Coach &amp; Support Files</div>
+        <ul>
+          <li><strong>gg-coach-dashboard.html</strong> — Coach dashboard</li>
+          <li><strong>gg-pdf-report.html</strong> — PDF report generator</li>
+          <li><strong>gg-overview.html</strong> — Full app overview</li>
+          <li><strong>gg-handoff-document.html</strong> — This document</li>
+        </ul>
+        <div class="section-subtitle" style="margin-top:16px">Total</div>
+        <ul>
+          <li><strong>11 HTML files</strong> — all screens and tools</li>
+          <li><strong>0 external dependencies</strong> — self-contained</li>
+          <li><strong>Google Fonts</strong> — Alex Brush + Inter (CDN)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. Developer Instructions -->
+  <div class="section page-break">
+    <div class="section-title">08 · Instructions for Developer</div>
+
+    <div class="section-subtitle">Step 1 — Review the Prototype</div>
+    <p>Open <strong>gg-overview.html</strong> in a browser. This shows all 9 screens with descriptions and live links to each one. Click through every screen to understand the full user experience before writing any code.</p>
+
+    <div class="section-subtitle">Step 2 — Understand the Two Sides</div>
+    <ul>
+      <li><strong>Client side</strong> (gg-login through gg-weekly-summary) — mobile app, max width 390px</li>
+      <li><strong>Coach side</strong> (gg-coach-dashboard) — web/desktop interface, max width 480px currently but can expand</li>
+    </ul>
+
+    <div class="section-subtitle">Step 3 — Recommended Tech Stack</div>
+    <ul>
+      <li><strong>Frontend:</strong> Convert HTML/CSS/JS to React Native for mobile, React for coach web dashboard</li>
+      <li><strong>Backend:</strong> Firebase (Authentication + Firestore + Hosting)</li>
+      <li><strong>PDF Generation:</strong> Puppeteer or React-PDF for server-side PDF export</li>
+      <li><strong>App Packaging:</strong> Expo (React Native) for iOS + Android</li>
+    </ul>
+
+    <div class="section-subtitle">Step 4 — Key Business Rules to Preserve</div>
+    <ul>
+      <li>Fixed expenses <strong>only appear in the Daily Log after being checked off as paid</strong></li>
+      <li>Debts must <strong>always sort smallest to largest remaining balance</strong> — never manually reordered</li>
+      <li>Coach dashboard client list must <strong>always sort: Over Budget → At Risk → On Track</strong></li>
+      <li>Clients are <strong>completely private from each other</strong> — no cross-visibility</li>
+      <li>The word <strong>"Needs" is never used</strong> — it is always "Fixed" in this app</li>
+      <li>The word <strong>"Advisor" is never used</strong> — it is always "Coach" in this app</li>
+      <li>Budget score is 0-100 — calculate based on % of categories on track</li>
+    </ul>
+
+    <div class="section-subtitle">Step 5 — Design Rules to Preserve</div>
+    <ul>
+      <li>Default mode is <strong>dark</strong> — black background throughout</li>
+      <li>Primary font is <strong>Inter</strong> for all UI, <strong>Alex Brush</strong> for brand/script only</li>
+      <li>Gold sparkle animation runs on <strong>every screen background</strong></li>
+      <li>All primary action buttons use the <strong>gold shimmer animation</strong></li>
+      <li>Celebrations are <strong>subtle</strong> — gold shimmer only, no confetti or loud animations</li>
+      <li>Over-budget warnings use <strong>red (#E05555)</strong> with a pulsing animation</li>
+    </ul>
+
+    <div class="highlight">
+      <p>📌 <strong>To the developer:</strong> This prototype was built screen by screen with the client. Every color, font, label, icon, and interaction was deliberately chosen. Please preserve all design decisions exactly as built. If you have questions about any specific decision, refer to this document or the prototype files directly.</p>
+    </div>
+  </div>
+
+  <!-- 9. Contact -->
+  <div class="section">
+    <div class="section-title">09 · Contact &amp; Next Steps</div>
+
+    <div class="two-col">
+      <div>
+        <div class="section-subtitle">Business</div>
+        <ul>
+          <li><strong>Company:</strong> G&amp;G Wealth Management</li>
+          <li><strong>Founders:</strong> Gustavo &amp; Greys</li>
+          <li><strong>App Name:</strong> G&amp;G Budgeting</li>
+          <li><strong>Target Users:</strong> 5-10 clients initially, scaling up</li>
+        </ul>
+      </div>
+      <div>
+        <div class="section-subtitle">Immediate Next Steps</div>
+        <ol>
+          <li>Share this document with your developer</li>
+          <li>Developer reviews all 11 prototype files</li>
+          <li>Set up Firebase project</li>
+          <li>Convert HTML to React Native</li>
+          <li>Wire up authentication &amp; database</li>
+          <li>Test with first client</li>
+          <li>Submit to App Store</li>
+        </ol>
+      </div>
+    </div>
+
+    <div style="margin-top:24px;text-align:center;padding:24px;background:rgba(201,168,76,0.05);border:1px solid rgba(201,168,76,0.15);border-radius:12px">
+      <div style="font-family:'Alex Brush',cursive;font-size:40px;color:var(--gold);margin-bottom:6px">G&amp;G</div>
+      <div style="font-size:9px;letter-spacing:0.24em;text-transform:uppercase;color:var(--gold-dim);margin-bottom:10px">Wealth Management</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.8">Built with purpose. Designed with care.<br>Every dollar your clients control today builds the life they want tomorrow.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// No JS needed for this document — pure HTML/CSS
+</script>
+</body>
+</html>

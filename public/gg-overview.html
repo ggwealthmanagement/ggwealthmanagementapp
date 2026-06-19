@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G&G Wealth Management — App Overview</title>
+<link href="https://fonts.googleapis.com/css2?family=Alex+Brush&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root {
+    --black:#080808; --card:#111111; --card2:#161616;
+    --gold:#C9A84C; --gold-light:#E2C472; --gold-dim:#7A6230;
+    --white:#F0EDE8; --muted:#5A5550; --border:rgba(201,168,76,0.15);
+    --green:#3DAA68;
+  }
+  html,body { background:#050505; font-family:'Inter',sans-serif; color:var(--white); min-height:100vh; }
+
+  /* Sparkle */
+  #sparkle-canvas { position:fixed; inset:0; pointer-events:none; z-index:0; opacity:0.35; }
+
+  /* Hero header */
+  .hero { position:relative; z-index:1; text-align:center; padding:60px 24px 48px; border-bottom:1px solid var(--border); }
+  .hero-script { font-family:'Alex Brush',cursive; font-size:72px; color:var(--gold); text-shadow:0 0 40px rgba(201,168,76,0.25); line-height:1; margin-bottom:10px; }
+  .hero-sub    { font-size:11px; letter-spacing:0.32em; text-transform:uppercase; color:var(--gold-dim); margin-bottom:20px; }
+  .hero-desc   { font-size:14px; color:var(--muted); max-width:500px; margin:0 auto 28px; line-height:1.8; }
+  .hero-stats  { display:flex; align-items:center; justify-content:center; gap:32px; flex-wrap:wrap; }
+  .hs-item     { text-align:center; }
+  .hs-num      { font-size:28px; font-weight:700; color:var(--gold-light); letter-spacing:-0.02em; }
+  .hs-label    { font-size:9px; letter-spacing:0.18em; text-transform:uppercase; color:var(--muted); margin-top:3px; }
+
+  /* Divider */
+  .gold-divider { height:1px; background:linear-gradient(90deg,transparent,rgba(201,168,76,0.4),transparent); margin:0 40px; }
+
+  /* Section headers */
+  .section-header { position:relative; z-index:1; text-align:center; padding:48px 24px 32px; }
+  .sh-tag   { font-size:9px; letter-spacing:0.28em; text-transform:uppercase; color:var(--gold-dim); margin-bottom:8px; }
+  .sh-title { font-size:28px; font-weight:700; color:var(--white); margin-bottom:8px; letter-spacing:-0.01em; }
+  .sh-desc  { font-size:13px; color:var(--muted); max-width:480px; margin:0 auto; line-height:1.7; }
+
+  /* Screen grid */
+  .screen-grid { position:relative; z-index:1; display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:24px; padding:0 32px 48px; max-width:1400px; margin:0 auto; }
+
+  /* Screen card */
+  .screen-card { background:var(--card); border:1px solid var(--border); border-radius:20px; overflow:hidden; transition:transform 0.2s, border-color 0.2s, box-shadow 0.2s; cursor:pointer; }
+  .screen-card:hover { transform:translateY(-4px); border-color:rgba(201,168,76,0.35); box-shadow:0 12px 40px rgba(0,0,0,0.4); }
+
+  /* Phone mockup */
+  .phone-wrap { background:#0A0A0A; padding:20px 20px 0; display:flex; justify-content:center; }
+  .phone      { width:180px; background:#080808; border-radius:24px 24px 0 0; border:1px solid rgba(255,255,255,0.08); border-bottom:none; overflow:hidden; box-shadow:0 0 0 6px #0D0D0D, 0 0 0 7px rgba(255,255,255,0.04); }
+  .phone-screen { width:100%; aspect-ratio:9/17; object-fit:cover; object-position:top; display:block; }
+
+  /* Placeholder phone screen */
+  .phone-placeholder { width:100%; aspect-ratio:9/17; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; }
+  .pp-icon  { font-size:36px; opacity:0.4; }
+  .pp-label { font-size:10px; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; }
+
+  /* Card info */
+  .card-info { padding:18px 20px 20px; }
+  .ci-number { font-size:9px; letter-spacing:0.2em; text-transform:uppercase; color:var(--gold-dim); margin-bottom:5px; }
+  .ci-title  { font-size:15px; font-weight:700; color:var(--white); margin-bottom:6px; }
+  .ci-desc   { font-size:11px; color:var(--muted); line-height:1.6; margin-bottom:14px; }
+  .ci-tags   { display:flex; flex-wrap:wrap; gap:6px; }
+  .ci-tag    { font-size:9px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; padding:3px 9px; border-radius:20px; background:rgba(201,168,76,0.08); border:1px solid rgba(201,168,76,0.18); color:var(--gold-dim); }
+
+  /* Open button */
+  .open-btn { display:flex; align-items:center; justify-content:center; gap:6px; width:100%; padding:11px; background:rgba(201,168,76,0.07); border:none; border-top:1px solid var(--border); color:var(--gold); font-family:'Inter',sans-serif; font-size:10px; font-weight:600; letter-spacing:0.16em; text-transform:uppercase; cursor:pointer; transition:background 0.2s; text-decoration:none; }
+  .open-btn:hover { background:rgba(201,168,76,0.14); }
+
+  /* Coach section — wider card */
+  .screen-card.wide { grid-column:span 2; }
+  .screen-card.wide .phone-wrap { display:none; }
+  .screen-card.wide .coach-preview { background:#0A0A0A; padding:24px; display:flex; gap:12px; overflow-x:auto; scrollbar-width:none; }
+  .screen-card.wide .coach-preview::-webkit-scrollbar { display:none; }
+  .coach-mini { background:var(--card2); border:1px solid var(--border); border-radius:12px; padding:14px; min-width:160px; flex-shrink:0; }
+  .cm-name    { font-size:12px; font-weight:600; color:var(--white); margin-bottom:3px; }
+  .cm-status  { font-size:9px; margin-bottom:8px; }
+  .cm-bar     { height:4px; border-radius:2px; margin-bottom:3px; }
+  .cm-meta    { font-size:9px; color:var(--muted); }
+
+  /* Feature list */
+  .features-section { position:relative; z-index:1; max-width:900px; margin:0 auto; padding:0 32px 64px; }
+  .features-grid    { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .feature-card     { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:18px; display:flex; align-items:flex-start; gap:14px; }
+  .feat-icon { font-size:24px; flex-shrink:0; margin-top:2px; }
+  .feat-title { font-size:13px; font-weight:600; color:var(--white); margin-bottom:5px; }
+  .feat-desc  { font-size:11px; color:var(--muted); line-height:1.6; }
+
+  /* Build status */
+  .build-section { position:relative; z-index:1; max-width:900px; margin:0 auto; padding:0 32px 80px; }
+  .build-grid    { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; }
+  .build-item    { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; display:flex; align-items:center; gap:10px; }
+  .build-dot     { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .build-dot.done    { background:var(--green); }
+  .build-dot.partial { background:var(--gold); }
+  .build-dot.todo    { background:var(--muted); }
+  .build-text    { font-size:12px; font-weight:500; color:var(--white); }
+  .build-sub     { font-size:9px; color:var(--muted); }
+
+  /* Footer */
+  .overview-footer { position:relative; z-index:1; text-align:center; padding:40px 24px; border-top:1px solid var(--border); }
+  .of-script { font-family:'Alex Brush',cursive; font-size:44px; color:var(--gold); margin-bottom:8px; }
+  .of-sub    { font-size:9px; letter-spacing:0.24em; text-transform:uppercase; color:var(--gold-dim); margin-bottom:16px; }
+  .of-text   { font-size:12px; color:var(--muted); line-height:1.8; max-width:400px; margin:0 auto; }
+
+  @media(max-width:700px) {
+    .screen-grid { grid-template-columns:1fr; padding:0 20px 40px; }
+    .screen-card.wide { grid-column:span 1; }
+    .features-grid { grid-template-columns:1fr; }
+    .hero-script { font-size:52px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="sparkle-canvas"></canvas>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="hero-script">G&amp;G</div>
+  <div class="hero-sub">Wealth Management · Budgeting App</div>
+  <div class="hero-desc">A complete personal budgeting system designed to build financial confidence — from paycheck to payoff, one week at a time.</div>
+  <div class="hero-stats">
+    <div class="hs-item"><div class="hs-num">9</div><div class="hs-label">Screens Built</div></div>
+    <div class="hs-item"><div class="hs-num">4</div><div class="hs-label">Budget Rings</div></div>
+    <div class="hs-item"><div class="hs-num">2</div><div class="hs-label">App Sides</div></div>
+    <div class="hs-item"><div class="hs-num">100%</div><div class="hs-label">Custom Built</div></div>
+  </div>
+</div>
+
+<div class="gold-divider"></div>
+
+<!-- CLIENT APP SCREENS -->
+<div class="section-header">
+  <div class="sh-tag">Client Side</div>
+  <div class="sh-title">📱 The Client App</div>
+  <div class="sh-desc">What your clients see on their phone every single day — clean, motivating, and built for confidence.</div>
+</div>
+
+<div class="screen-grid">
+
+  <!-- Login -->
+  <div class="screen-card">
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="phone-placeholder" style="background:#080808">
+          <div style="font-family:'Alex Brush',cursive;font-size:40px;color:#C9A84C;text-shadow:0 0 20px rgba(201,168,76,0.3)">G&amp;G</div>
+          <div style="font-size:8px;letter-spacing:0.28em;color:#7A6230;text-transform:uppercase">Wealth Management</div>
+          <div style="width:60%;height:1px;background:rgba(201,168,76,0.2);margin:8px 0"></div>
+          <div style="width:70%;height:28px;background:#141414;border:1px solid rgba(201,168,76,0.2);border-radius:6px"></div>
+          <div style="width:70%;height:28px;background:#141414;border:1px solid rgba(201,168,76,0.2);border-radius:6px"></div>
+          <div style="width:70%;height:28px;background:linear-gradient(135deg,#B8923E,#E2C472);border-radius:6px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-info">
+      <div class="ci-number">Screen 01</div>
+      <div class="ci-title">Login Screen</div>
+      <div class="ci-desc">Elegant black & gold branded entry point. Alex Brush script, gold sparkle animation, and a shimmering Sign In button that invites clients in.</div>
+      <div class="ci-tags"><span class="ci-tag">Sparkles</span><span class="ci-tag">Shimmer Button</span><span class="ci-tag">Alex Brush Font</span></div>
+    </div>
+    <a class="open-btn" href="gg-login.html" target="_blank">Open Screen ›</a>
+  </div>
+
+  <!-- Home -->
+  <div class="screen-card">
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="phone-placeholder" style="background:#080808">
+          <div style="font-size:8px;letter-spacing:0.14em;color:#5A5550;text-transform:uppercase;margin-bottom:4px">Good Morning</div>
+          <div style="font-family:'Alex Brush',cursive;font-size:24px;color:#C9A84C;margin-bottom:12px">Maria</div>
+          <div style="position:relative;width:90px;height:90px">
+            <svg viewBox="0 0 90 90" style="width:100%;height:100%;transform:rotate(-90deg)">
+              <circle cx="45" cy="45" r="38" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="7"/>
+              <circle cx="45" cy="45" r="29" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="7"/>
+              <circle cx="45" cy="45" r="20" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="7"/>
+              <circle cx="45" cy="45" r="11" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="7"/>
+              <circle cx="45" cy="45" r="38" fill="none" stroke="#8B1A1A" stroke-width="7" stroke-linecap="round" stroke-dasharray="239" stroke-dashoffset="84"/>
+              <circle cx="45" cy="45" r="29" fill="none" stroke="#1A5C2E" stroke-width="7" stroke-linecap="round" stroke-dasharray="182" stroke-dashoffset="124"/>
+              <circle cx="45" cy="45" r="20" fill="none" stroke="#C8B48A" stroke-width="7" stroke-linecap="round" stroke-dasharray="126" stroke-dashoffset="66"/>
+              <circle cx="45" cy="45" r="11" fill="none" stroke="#C97A2A" stroke-width="7" stroke-linecap="round" stroke-dasharray="69" stroke-dashoffset="25"/>
+            </svg>
+            <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+              <div style="font-size:13px;font-weight:700;color:#E2C472">$635</div>
+              <div style="font-size:7px;color:#5A5550;text-transform:uppercase;letter-spacing:0.1em">spent</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:10px">
+            <div style="width:6px;height:6px;border-radius:50%;background:#8B1A1A"></div>
+            <div style="width:6px;height:6px;border-radius:50%;background:#1A5C2E"></div>
+            <div style="width:6px;height:6px;border-radius:50%;background:#C8B48A"></div>
+            <div style="width:6px;height:6px;border-radius:50%;background:#C97A2A"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-info">
+      <div class="ci-number">Screen 02</div>
+      <div class="ci-title">Home Screen</div>
+      <div class="ci-desc">4 concentric budget rings showing Debt, Savings, Wants & Fixed. Live income entry, streak badges, emergency fund & debt quick stats.</div>
+      <div class="ci-tags"><span class="ci-tag">4 Budget Rings</span><span class="ci-tag">Streaks</span><span class="ci-tag">Quick Stats</span></div>
+    </div>
+    <a class="open-btn" href="gg-home.html" target="_blank">Open Screen ›</a>
+  </div>
+
+  <!-- Daily Log -->
+  <div class="screen-card">
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="phone-placeholder" style="background:#080808">
+          <div style="font-family:'Alex Brush',cursive;font-size:28px;color:#C9A84C;margin-bottom:6px">Daily Log</div>
+          <div style="display:flex;gap:4px;margin-bottom:10px">
+            <div style="padding:4px 8px;background:rgba(201,168,76,0.1);border:1px solid var(--gold);border-radius:10px;font-size:8px;color:#C9A84C">All</div>
+            <div style="padding:4px 8px;background:#111;border:1px solid rgba(255,255,255,0.07);border-radius:10px;font-size:8px;color:#5A5550">Fixed</div>
+            <div style="padding:4px 8px;background:#111;border:1px solid rgba(255,255,255,0.07);border-radius:10px;font-size:8px;color:#5A5550">Wants</div>
+            <div style="padding:4px 8px;background:#111;border:1px solid rgba(255,255,255,0.07);border-radius:10px;font-size:8px;color:#5A5550">Debt</div>
+          </div>
+          <div style="width:85%;background:#111;border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:8px;margin-bottom:5px;display:flex;justify-content:space-between">
+            <div><div style="font-size:9px;color:#F0EDE8">Mortgage</div><div style="font-size:7px;color:#C97A2A;text-transform:uppercase">Fixed</div></div>
+            <div style="font-size:10px;font-weight:700;color:#F0EDE8">$950</div>
+          </div>
+          <div style="width:85%;background:#111;border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:8px;display:flex;justify-content:space-between">
+            <div><div style="font-size:9px;color:#F0EDE8">Coffee Shop</div><div style="font-size:7px;color:#C8B48A;text-transform:uppercase">Wants</div></div>
+            <div style="font-size:10px;font-weight:700;color:#F0EDE8">$6.75</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-info">
+      <div class="ci-number">Screen 03</div>
+      <div class="ci-title">Daily Log</div>
+      <div class="ci-desc">Real-time expense logging with category filters. Fixed expenses tab lets clients manage monthly bills and check them off as paid — auto-posts to log.</div>
+      <div class="ci-tags"><span class="ci-tag">Live Entry</span><span class="ci-tag">Fixed Bills</span><span class="ci-tag">Category Filter</span></div>
+    </div>
+    <a class="open-btn" href="gg-daily-log.html" target="_blank">Open Screen ›</a>
+  </div>
+
+  <!-- Debt Tracker -->
+  <div class="screen-card">
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="phone-placeholder" style="background:#080808">
+          <div style="font-family:'Alex Brush',cursive;font-size:28px;color:#C9A84C;margin-bottom:12px">Debt Snowball</div>
+          <div style="width:85%;background:#111;border:1px solid rgba(139,26,26,0.4);border-radius:10px;padding:10px;margin-bottom:6px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <div style="font-size:9px;color:#F0EDE8;font-weight:600">Store Card</div>
+              <div style="font-size:9px;color:#F0EDE8;font-weight:700">$160 left</div>
+            </div>
+            <div style="height:4px;background:rgba(255,255,255,0.05);border-radius:2px"><div style="width:67%;height:100%;background:#8B1A1A;border-radius:2px"></div></div>
+            <div style="font-size:7px;color:#8B1A1A;margin-top:3px">67% paid · 🎯 Target</div>
+          </div>
+          <div style="width:85%;background:#111;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <div style="font-size:9px;color:#F0EDE8;font-weight:600">Medical Bill</div>
+              <div style="font-size:9px;color:#F0EDE8;font-weight:700">$650 left</div>
+            </div>
+            <div style="height:4px;background:rgba(255,255,255,0.05);border-radius:2px"><div style="width:24%;height:100%;background:#8B1A1A;border-radius:2px"></div></div>
+            <div style="font-size:7px;color:#5A5550;margin-top:3px">24% paid</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-info">
+      <div class="ci-number">Screen 04</div>
+      <div class="ci-title">Debt Snowball Tracker</div>
+      <div class="ci-desc">Debts sorted smallest to largest automatically. Log payments, track progress, projected payoff dates, and a subtle gold celebration when a debt is eliminated.</div>
+      <div class="ci-tags"><span class="ci-tag">Snowball Method</span><span class="ci-tag">Progress Bars</span><span class="ci-tag">Celebration</span></div>
+    </div>
+    <a class="open-btn" href="gg-debt-tracker.html" target="_blank">Open Screen ›</a>
+  </div>
+
+  <!-- Savings -->
+  <div class="screen-card">
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="phone-placeholder" style="background:#080808">
+          <div style="font-family:'Alex Brush',cursive;font-size:28px;color:#C9A84C;margin-bottom:4px">Savings</div>
+          <div style="font-size:28px;font-weight:700;color:#3DAA68;margin-bottom:12px">$1,234</div>
+          <div style="width:85%;background:rgba(26,92,46,0.1);border:1px solid rgba(26,92,46,0.3);border-radius:10px;padding:10px;margin-bottom:6px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+              <div style="font-size:8px;color:#F0EDE8">🛡️ Emergency Fund</div>
+              <div style="font-size:9px;color:#3DAA68;font-weight:700">$320</div>
+            </div>
+            <div style="height:4px;background:rgba(255,255,255,0.05);border-radius:2px"><div style="width:32%;height:100%;background:#1A5C2E;border-radius:2px"></div></div>
+            <div style="font-size:7px;color:#3DAA68;margin-top:3px">32% · Goal: $1,000</div>
+          </div>
+          <div style="width:85%;background:#111;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+              <div style="font-size:8px;color:#F0EDE8">✈️ Vacation</div>
+              <div style="font-size:9px;color:#F0EDE8;font-weight:700">$450</div>
+            </div>
+            <div style="height:4px;background:rgba(255,255,255,0.05);border-radius:2px"><div style="width:23%;height:100%;background:#1A5C2E;border-radius:2px"></div></div>
+            <div style="font-size:7px;color:#5A5550;margin-top:3px">23% · Goal: $2,000</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-info">
+      <div class="ci-number">Screen 05</div>
+      <div class="ci-title">Savings & Emergency Fund</div>
+      <div class="ci-desc">Emergency Fund set at $1,000 default (customizable). Add multiple savings goals with weekly contributions and projected completion dates.</div>
+      <div class="ci-tags"><span class="ci-tag">Emergency Fund</span><span class="ci-tag">Custom Goals</span><span class="ci-tag">Projections</span></div>
+    </div>
+    <a class="open-btn" href="gg-savings.html" target="_blank">Open Screen ›</a>
+  </div>
+
+  <!-- Weekly Summary -->
+  <div class="screen-card">
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="phone-placeholder" style="background:#080808">
+          <div style="font-family:'Alex Brush',cursive;font-size:24px;color:#C9A84C;margin-bottom:8px">Weekly Summary</div>
+          <div style="display:flex;gap:4px;margin-bottom:10px">
+            <div style="padding:4px 8px;background:rgba(201,168,76,0.1);border:1px solid var(--gold);border-radius:8px;font-size:7px;color:#C9A84C">Weekly</div>
+            <div style="padding:4px 8px;background:#111;border:1px solid rgba(255,255,255,0.07);border-radius:8px;font-size:7px;color:#5A5550">Monthly</div>
+            <div style="padding:4px 8px;background:#111;border:1px solid rgba(255,255,255,0.07);border-radius:8px;font-size:7px;color:#5A5550">Quarterly</div>
+          </div>
+          <div style="display:flex;gap:3px;align-items:flex-end;height:50px;margin-bottom:8px">
+            <div style="flex:1;height:35px;background:rgba(201,168,76,0.3);border-radius:2px 2px 0 0"></div>
+            <div style="flex:1;height:18px;background:rgba(201,168,76,0.3);border-radius:2px 2px 0 0"></div>
+            <div style="flex:1;height:48px;background:rgba(201,168,76,0.3);border-radius:2px 2px 0 0"></div>
+            <div style="flex:1;height:20px;background:#C9A84C;border-radius:2px 2px 0 0"></div>
+            <div style="flex:1;height:4px;background:rgba(255,255,255,0.07);border-radius:2px 2px 0 0"></div>
+            <div style="flex:1;height:4px;background:rgba(255,255,255,0.07);border-radius:2px 2px 0 0"></div>
+            <div style="flex:1;height:4px;background:rgba(255,255,255,0.07);border-radius:2px 2px 0 0"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;width:85%">
+            <div style="background:#111;border-radius:6px;padding:7px;text-align:center"><div style="font-size:12px;font-weight:700;color:#F0EDE8">$776</div><div style="font-size:7px;color:#5A5550;text-transform:uppercase">Spent</div></div>
+            <div style="background:#111;border-radius:6px;padding:7px;text-align:center"><div style="font-size:12px;font-weight:700;color:#3DAA68">$624</div><div style="font-size:7px;color:#5A5550;text-transform:uppercase">Left</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-info">
+      <div class="ci-number">Screen 06</div>
+      <div class="ci-title">Weekly Summary</div>
+      <div class="ci-desc">Full period review with budget score ring, spending chart, category breakdown, top expenses, wins & focus areas. Switches between weekly, monthly, and quarterly.</div>
+      <div class="ci-tags"><span class="ci-tag">Budget Score</span><span class="ci-tag">Progress Chart</span><span class="ci-tag">3 Periods</span></div>
+    </div>
+    <a class="open-btn" href="gg-weekly-summary.html" target="_blank">Open Screen ›</a>
+  </div>
+
+  <!-- Coach -->
+  <div class="screen-card">
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="phone-placeholder" style="background:#080808">
+          <div style="font-family:'Alex Brush',cursive;font-size:24px;color:#C9A84C;margin-bottom:10px">My Coach</div>
+          <div style="width:85%;background:#111;border:1px solid rgba(201,168,76,0.15);border-radius:10px;padding:8px;margin-bottom:8px;display:flex;align-items:center;gap:8px">
+            <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#B8923E,#E2C472);display:flex;align-items:center;justify-content:center;font-family:'Alex Brush',cursive;font-size:10px;color:#080808;flex-shrink:0">G</div>
+            <div><div style="font-size:8px;font-weight:600;color:#F0EDE8">Gustavo & Greys</div><div style="font-size:7px;color:#3DAA68">● Active</div></div>
+          </div>
+          <div style="width:75%;background:#161616;border:1px solid rgba(255,255,255,0.06);border-radius:4px 10px 10px 10px;padding:7px;margin-bottom:5px;align-self:flex-start">
+            <div style="font-size:8px;color:#F0EDE8;line-height:1.4">Great progress this week Maria! Keep it up 🏆</div>
+          </div>
+          <div style="width:72%;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.2);border-radius:10px 4px 10px 10px;padding:7px;margin-bottom:5px;align-self:flex-end">
+            <div style="font-size:8px;color:#F0EDE8;line-height:1.4">Thank you! The log is really helping me.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-info">
+      <div class="ci-number">Screen 07</div>
+      <div class="ci-title">Coach Corner</div>
+      <div class="ci-desc">Private two-way messaging between client and Gustavo & Greys. Pinned welcome note at the top. Client messages on the right, coach messages on the left.</div>
+      <div class="ci-tags"><span class="ci-tag">Live Chat</span><span class="ci-tag">Pinned Notes</span><span class="ci-tag">Two-Way</span></div>
+    </div>
+    <a class="open-btn" href="gg-coach.html" target="_blank">Open Screen ›</a>
+  </div>
+
+</div>
+
+<div class="gold-divider"></div>
+
+<!-- COACH SIDE -->
+<div class="section-header">
+  <div class="sh-tag">Coach Side</div>
+  <div class="sh-title">🖥️ Your Dashboard</div>
+  <div class="sh-desc">Your command center — see all clients at a glance, sorted by who needs the most attention first.</div>
+</div>
+
+<div class="screen-grid">
+
+  <!-- Coach Dashboard -->
+  <div class="screen-card wide">
+    <div class="coach-preview">
+      <div class="coach-mini" style="border-color:rgba(139,26,26,0.4)">
+        <div style="width:3px;height:32px;background:#8B1A1A;border-radius:2px;float:left;margin-right:8px"></div>
+        <div class="cm-name">Maria Gonzalez</div>
+        <div class="cm-status" style="color:#E05555">🔴 Over Budget</div>
+        <div class="cm-bar" style="width:100%;height:4px;background:#8B1A1A;border-radius:2px"></div>
+        <div class="cm-meta">$1,520 / $1,400 · 7d streak</div>
+      </div>
+      <div class="coach-mini" style="border-color:rgba(139,26,26,0.4)">
+        <div style="width:3px;height:32px;background:#8B1A1A;border-radius:2px;float:left;margin-right:8px"></div>
+        <div class="cm-name">James Carter</div>
+        <div class="cm-status" style="color:#E05555">🔴 Over Budget</div>
+        <div class="cm-bar" style="width:100%;height:4px;background:#8B1A1A;border-radius:2px"></div>
+        <div class="cm-meta">$1,950 / $1,800 · 3d streak</div>
+      </div>
+      <div class="coach-mini" style="border-color:rgba(201,168,76,0.3)">
+        <div style="width:3px;height:32px;background:#C9A84C;border-radius:2px;float:left;margin-right:8px"></div>
+        <div class="cm-name">Sofia Ramirez</div>
+        <div class="cm-status" style="color:#C9A84C">🟡 At Risk</div>
+        <div class="cm-bar" style="width:88%;height:4px;background:#C9A84C;border-radius:2px"></div>
+        <div class="cm-meta">$1,050 / $1,200 · 5d streak</div>
+      </div>
+      <div class="coach-mini" style="border-color:rgba(26,92,46,0.35)">
+        <div style="width:3px;height:32px;background:#1A5C2E;border-radius:2px;float:left;margin-right:8px"></div>
+        <div class="cm-name">David Thompson</div>
+        <div class="cm-status" style="color:#3DAA68">🟢 On Track</div>
+        <div class="cm-bar" style="width:66%;height:4px;background:#1A5C2E;border-radius:2px"></div>
+        <div class="cm-meta">$1,450 / $2,200 · 12d streak</div>
+      </div>
+      <div class="coach-mini" style="border-color:rgba(26,92,46,0.35)">
+        <div style="width:3px;height:32px;background:#1A5C2E;border-radius:2px;float:left;margin-right:8px"></div>
+        <div class="cm-name">Keisha Williams</div>
+        <div class="cm-status" style="color:#3DAA68">🟢 On Track</div>
+        <div class="cm-bar" style="width:61%;height:4px;background:#1A5C2E;border-radius:2px"></div>
+        <div class="cm-meta">$980 / $1,600 · 9d streak</div>
+      </div>
+    </div>
+    <div class="card-info">
+      <div class="ci-number">Screen 08</div>
+      <div class="ci-title">Coach Dashboard</div>
+      <div class="ci-desc">Your command center. All clients sorted by priority — over budget first, at risk second, on track last. Tap any client to see their full detail, send coaching notes, add or remove clients. Includes PDF export per client.</div>
+      <div class="ci-tags"><span class="ci-tag">Triage Sort</span><span class="ci-tag">Client Detail</span><span class="ci-tag">Coaching Notes</span><span class="ci-tag">Add/Remove Clients</span></div>
+    </div>
+    <a class="open-btn" href="gg-coach-dashboard.html" target="_blank">Open Dashboard ›</a>
+  </div>
+
+  <!-- PDF Report -->
+  <div class="screen-card wide">
+    <div class="coach-preview" style="background:#fff;padding:20px 24px">
+      <div style="background:#080808;padding:16px 20px;border-radius:10px;display:flex;align-items:center;justify-content:space-between;width:100%;min-width:300px">
+        <div><div style="font-family:'Alex Brush',cursive;font-size:28px;color:#C9A84C">G&amp;G</div><div style="font-size:7px;letter-spacing:0.2em;color:#7A6230;text-transform:uppercase">Wealth Management</div></div>
+        <div style="text-align:right"><div style="font-size:8px;font-weight:600;letter-spacing:0.14em;color:#C9A84C;text-transform:uppercase">Weekly Report</div><div style="font-size:8px;color:#5A5550">June 1 – June 7, 2025</div></div>
+      </div>
+      <div style="background:#F8F6F2;padding:12px 16px;border-radius:8px;display:flex;align-items:center;justify-content:space-between;min-width:260px">
+        <div><div style="font-size:13px;font-weight:700;color:#1A1A1A">Maria Gonzalez</div><div style="font-size:9px;color:#9A9590">G&G Wealth Management Client</div></div>
+        <div style="background:#D1FAE5;color:#065F46;font-size:8px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:0.1em;text-transform:uppercase">On Track</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;min-width:280px">
+        <div style="background:#F8F6F2;border-radius:6px;padding:10px;text-align:center"><div style="font-size:14px;font-weight:700;color:#1A1A1A">$776</div><div style="font-size:7px;color:#9A9590;text-transform:uppercase;letter-spacing:0.1em">Spent</div></div>
+        <div style="background:#F8F6F2;border-radius:6px;padding:10px;text-align:center"><div style="font-size:14px;font-weight:700;color:#065F46">$624</div><div style="font-size:7px;color:#9A9590;text-transform:uppercase;letter-spacing:0.1em">Left</div></div>
+        <div style="background:#F8F6F2;border-radius:6px;padding:10px;text-align:center"><div style="font-size:14px;font-weight:700;color:#92400E">$64</div><div style="font-size:7px;color:#9A9590;text-transform:uppercase;letter-spacing:0.1em">Saved</div></div>
+        <div style="background:#F8F6F2;border-radius:6px;padding:10px;text-align:center"><div style="font-size:14px;font-weight:700;color:#1A1A1A">$149</div><div style="font-size:7px;color:#9A9590;text-transform:uppercase;letter-spacing:0.1em">Debt</div></div>
+      </div>
+    </div>
+    <div class="card-info">
+      <div class="ci-number">Screen 09</div>
+      <div class="ci-title">PDF Report Generator</div>
+      <div class="ci-desc">Branded G&G Wealth Management reports. Enter client name, pick Weekly / Monthly / Quarterly, add a personal coach note, and print directly to PDF. Includes spending chart, debt progress, savings goals, wins & focus areas.</div>
+      <div class="ci-tags"><span class="ci-tag">Print to PDF</span><span class="ci-tag">3 Periods</span><span class="ci-tag">Coach Note</span><span class="ci-tag">Branded</span></div>
+    </div>
+    <a class="open-btn" href="gg-pdf-report.html" target="_blank">Open Report Generator ›</a>
+  </div>
+
+</div>
+
+<div class="gold-divider"></div>
+
+<!-- Features -->
+<div class="section-header">
+  <div class="sh-tag">What's Built</div>
+  <div class="sh-title">Full Feature List</div>
+</div>
+
+<div class="features-section">
+  <div class="features-grid">
+    <div class="feature-card"><div class="feat-icon">💰</div><div><div class="feat-title">4-Ring Budget System</div><div class="feat-desc">Debt Payoff, Savings, Wants & Fixed — each with its own color, progress bar, and status tracking.</div></div></div>
+    <div class="feature-card"><div class="feat-icon">❄️</div><div><div class="feat-title">Debt Snowball Tracker</div><div class="feat-desc">Debts auto-sorted smallest to largest. Log payments, see projected payoff dates, celebrate wins.</div></div></div>
+    <div class="feature-card"><div class="feat-icon">🏠</div><div><div class="feat-title">Fixed Expenses System</div><div class="feat-desc">Enter monthly bills once. Check them off as paid — they auto-post to the daily log instantly.</div></div></div>
+    <div class="feature-card"><div class="feat-icon">🛡️</div><div><div class="feat-title">Emergency Fund + Goals</div><div class="feat-desc">$1,000 default emergency fund plus unlimited custom savings goals with projected completion dates.</div></div></div>
+    <div class="feature-card"><div class="feat-icon">🔥</div><div><div class="feat-title">Dual Streak System</div><div class="feat-desc">Two streaks tracked simultaneously — consecutive days logged and consecutive days under budget.</div></div></div>
+    <div class="feature-card"><div class="feat-icon">📊</div><div><div class="feat-title">Weekly / Monthly / Quarterly Reports</div><div class="feat-desc">Budget score, spending chart, category breakdown, wins & focus areas across all three periods.</div></div></div>
+    <div class="feature-card"><div class="feat-icon">💬</div><div><div class="feat-title">Two-Way Coach Messaging</div><div class="feat-desc">Private conversation thread between each client and Gustavo & Greys. Pinned welcome note included.</div></div></div>
+    <div class="feature-card"><div class="feat-icon">🎯</div><div><div class="feat-title">Coach Triage Dashboard</div><div class="feat-desc">Clients sorted by urgency — over budget first. Full detail view with notes, activity & PDF export.</div></div></div>
+    <div class="feature-card"><div class="feat-icon">📄</div><div><div class="feat-title">PDF Report Generator</div><div class="feat-desc">Branded G&G reports printable to PDF. Weekly, monthly, or quarterly with personal coach notes.</div></div></div>
+    <div class="feature-card"><div class="feat-icon">✨</div><div><div class="feat-title">Premium Black & Gold Design</div><div class="feat-desc">Gold sparkles, shimmer buttons, Alex Brush script, dark mode throughout — built to match your brand.</div></div></div>
+  </div>
+</div>
+
+<div class="gold-divider"></div>
+
+<!-- Build Status -->
+<div class="section-header">
+  <div class="sh-tag">Build Status</div>
+  <div class="sh-title">What's Done & What's Next</div>
+</div>
+
+<div class="build-section">
+  <div class="build-grid">
+    <div class="build-item"><div class="build-dot done"></div><div><div class="build-text">Login Screen</div><div class="build-sub">Complete</div></div></div>
+    <div class="build-item"><div class="build-dot done"></div><div><div class="build-text">Home Screen + Rings</div><div class="build-sub">Complete</div></div></div>
+    <div class="build-item"><div class="build-dot done"></div><div><div class="build-text">Daily Log</div><div class="build-sub">Complete</div></div></div>
+    <div class="build-item"><div class="build-dot done"></div><div><div class="build-text">Fixed Expenses</div><div class="build-sub">Complete</div></div></div>
+    <div class="build-item"><div class="build-dot done"></div><div><div class="build-text">Debt Snowball</div><div class="build-sub">Complete</div></div></div>
+    <div class="build-item"><div class="build-dot done"></div><div><div class="build-text">Savings & Goals</div><div class="build-sub">Complete</div></div></div>
+    <div class="build-item"><div class="build-dot done"></div><div><div class="build-text">Coach Corner</div><div class="build-sub">Complete</div></div></div>
+    <div class="build-item"><div class="build-dot done"></div><div><div class="build-text">Weekly Summary</div><div class="build-sub">Complete</div></div></div>
+    <div class="build-item"><div class="build-dot done"></div><div><div class="build-text">Coach Dashboard</div><div class="build-sub">Complete</div></div></div>
+    <div class="build-item"><div class="build-dot done"></div><div><div class="build-text">PDF Reports</div><div class="build-sub">Complete</div></div></div>
+    <div class="build-item"><div class="build-dot todo"></div><div><div class="build-text">Real Login / Auth</div><div class="build-sub">Needs developer</div></div></div>
+    <div class="build-item"><div class="build-dot todo"></div><div><div class="build-text">Live Database Sync</div><div class="build-sub">Needs developer</div></div></div>
+    <div class="build-item"><div class="build-dot todo"></div><div><div class="build-text">Push Notifications</div><div class="build-sub">Future feature</div></div></div>
+    <div class="build-item"><div class="build-dot todo"></div><div><div class="build-text">App Store Launch</div><div class="build-sub">Needs developer</div></div></div>
+  </div>
+  <div style="margin-top:20px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:12px">
+    <div style="font-size:20px">💡</div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.7">Everything built here is a <strong style="color:var(--white)">complete working prototype</strong> — every screen, color, and feature is decided. A developer can take these files and wire up the real backend (database, authentication, live sync) to make it fully production-ready.</div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="overview-footer">
+  <div class="of-script">G&amp;G</div>
+  <div class="of-sub">Wealth Management · Budgeting App</div>
+  <div class="of-text">Built screen by screen, decision by decision. Every color chosen, every feature designed — a complete blueprint for your clients' financial transformation.</div>
+</div>
+
+<script>
+const canvas=document.getElementById('sparkle-canvas'),ctx=canvas.getContext('2d');
+function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
+resize();window.addEventListener('resize',resize);
+const SC=['rgba(226,196,114,','rgba(201,168,76,','rgba(240,237,232,'];
+function Sparkle(){this.x=Math.random()*canvas.width;this.y=Math.random()*canvas.height;this.size=Math.random()*1.3+0.3;this.ba=Math.random()*0.35+0.07;this.a=this.ba;this.ph=Math.random()*Math.PI*2;this.sp=Math.random()*0.015+0.006;this.c=SC[Math.floor(Math.random()*SC.length)];this.arms=Math.random()>0.65;}
+Sparkle.prototype.update=function(){this.ph+=this.sp;this.a=this.ba*(0.4+0.6*Math.abs(Math.sin(this.ph)));};
+Sparkle.prototype.draw=function(){ctx.save();ctx.globalAlpha=this.a;if(this.arms){ctx.strokeStyle=this.c+this.a+')';ctx.lineWidth=this.size*0.5;ctx.lineCap='round';var s=this.size*3;ctx.beginPath();ctx.moveTo(this.x-s,this.y);ctx.lineTo(this.x+s,this.y);ctx.moveTo(this.x,this.y-s);ctx.lineTo(this.x,this.y+s);ctx.stroke();}else{ctx.fillStyle=this.c+'1)';ctx.beginPath();ctx.arc(this.x,this.y,this.size,0,Math.PI*2);ctx.fill();}ctx.restore();};
+var SP=[];for(var i=0;i<80;i++)SP.push(new Sparkle());
+function animate(){ctx.clearRect(0,0,canvas.width,canvas.height);SP.forEach(function(s){s.update();s.draw();});requestAnimationFrame(animate);}
+animate();
+</script>
+</body>
+</html>

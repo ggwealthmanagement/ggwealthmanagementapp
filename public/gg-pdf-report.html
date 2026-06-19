@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G&G Wealth Management — Client Report</title>
+<link href="https://fonts.googleapis.com/css2?family=Alex+Brush&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+
+  /* ── SCREEN STYLES (preview) ── */
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root {
+    --black:#080808; --card:#111111;
+    --gold:#C9A84C; --gold-light:#E2C472; --gold-dim:#7A6230;
+    --white:#F0EDE8; --muted:#5A5550; --border:rgba(201,168,76,0.15);
+    --green:#3DAA68; --red:#8B1A1A;
+  }
+
+  body { background:var(--black); font-family:'Inter',sans-serif; color:var(--white); min-height:100vh; display:flex; justify-content:center; }
+
+  .preview-shell { width:100%; max-width:480px; padding:40px 20px 60px; }
+
+  /* Controls */
+  .controls { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:20px; margin-bottom:24px; }
+  .ctrl-title { font-family:'Alex Brush',cursive; font-size:28px; color:var(--gold); margin-bottom:4px; }
+  .ctrl-sub   { font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:var(--muted); margin-bottom:18px; }
+
+  .ctrl-row   { display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+  .ctrl-label { font-size:9px; letter-spacing:0.18em; text-transform:uppercase; color:var(--muted); }
+  .ctrl-select, .ctrl-input { width:100%; background:#0A0A0A; border:1px solid var(--border); border-radius:8px; color:var(--white); font-family:'Inter',sans-serif; font-size:13px; padding:10px 14px; outline:none; }
+  .ctrl-select:focus, .ctrl-input:focus { border-color:rgba(201,168,76,0.4); }
+
+  .period-btns { display:flex; gap:8px; }
+  .period-btn  { flex:1; background:#0A0A0A; border:1px solid var(--border); border-radius:8px; color:var(--muted); cursor:pointer; font-family:'Inter',sans-serif; font-size:11px; font-weight:500; padding:10px; text-align:center; transition:all 0.2s; }
+  .period-btn.active { background:rgba(201,168,76,0.1); border-color:var(--gold); color:var(--white); }
+
+  .print-btn { width:100%; background:linear-gradient(135deg,#B8923E,#E2C472,#B8923E); background-size:200%; border:none; border-radius:10px; color:#080808; cursor:pointer; font-family:'Inter',sans-serif; font-size:11px; font-weight:700; letter-spacing:0.24em; text-transform:uppercase; padding:16px; margin-top:4px; animation:shimmer 3s ease-in-out infinite; transition:transform 0.15s; }
+  .print-btn:hover { transform:translateY(-1px); }
+  @keyframes shimmer { 0%,100%{background-position:0%} 50%{background-position:100%} }
+
+  /* Report preview card */
+  .report-preview { background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,0.5); }
+
+  /* ── PRINT / PDF STYLES ── */
+  @media print {
+    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    body { background:#fff !important; display:block; }
+    .preview-shell { padding:0; max-width:100%; }
+    .controls { display:none !important; }
+    .report-preview { box-shadow:none; border-radius:0; }
+    @page { margin:0; size:A4; }
+  }
+
+  /* ── REPORT INNER STYLES ── */
+  .report { font-family:'Inter',sans-serif; background:#fff; color:#1A1A1A; }
+
+  /* Report header */
+  .rpt-header { background:#080808; padding:32px 36px 28px; display:flex; align-items:center; justify-content:space-between; }
+  .rh-brand   { display:flex; flex-direction:column; }
+  .rh-script  { font-family:'Alex Brush',cursive; font-size:42px; color:#C9A84C; line-height:1; }
+  .rh-sub     { font-size:9px; letter-spacing:0.28em; text-transform:uppercase; color:#7A6230; margin-top:4px; }
+  .rh-right   { text-align:right; }
+  .rh-report-type { font-size:11px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:#C9A84C; margin-bottom:4px; }
+  .rh-period  { font-size:10px; color:#5A5550; }
+  .rh-date    { font-size:10px; color:#5A5550; margin-top:2px; }
+
+  /* Gold divider */
+  .gold-bar { height:3px; background:linear-gradient(90deg,#C9A84C,#E2C472,#C9A84C); }
+
+  /* Client info band */
+  .client-band { background:#F8F6F2; padding:20px 36px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #E8E4DC; }
+  .cb-left .cb-name  { font-size:20px; font-weight:700; color:#1A1A1A; margin-bottom:3px; }
+  .cb-left .cb-meta  { font-size:11px; color:#7A7470; }
+  .cb-right { text-align:right; }
+  .status-pill { display:inline-block; font-size:9px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; padding:4px 12px; border-radius:20px; }
+  .status-pill.over { background:#FEE2E2; color:#8B1A1A; }
+  .status-pill.risk { background:#FEF3C7; color:#92400E; }
+  .status-pill.good { background:#D1FAE5; color:#065F46; }
+  .cb-right .streak { font-size:11px; color:#7A7470; margin-top:6px; }
+
+  /* Report body */
+  .rpt-body { padding:28px 36px; }
+
+  /* Section title */
+  .rpt-section-title { font-size:9px; font-weight:700; letter-spacing:0.22em; text-transform:uppercase; color:#C9A84C; margin-bottom:12px; padding-bottom:6px; border-bottom:1px solid #E8E4DC; }
+
+  /* Summary numbers */
+  .summary-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px; }
+  .sg-card { background:#F8F6F2; border-radius:8px; padding:14px; text-align:center; }
+  .sg-label { font-size:8px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#9A9590; margin-bottom:6px; }
+  .sg-value { font-size:20px; font-weight:700; color:#1A1A1A; letter-spacing:-0.02em; }
+  .sg-value.gn { color:#065F46; }
+  .sg-value.rd { color:#8B1A1A; }
+  .sg-value.gd { color:#92400E; }
+
+  /* Category breakdown */
+  .cat-table { width:100%; border-collapse:collapse; margin-bottom:24px; }
+  .cat-table th { font-size:8px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#9A9590; padding:8px 12px; text-align:left; border-bottom:1px solid #E8E4DC; }
+  .cat-table td { font-size:12px; color:#1A1A1A; padding:10px 12px; border-bottom:1px solid #F0EDE8; vertical-align:middle; }
+  .cat-dot-sm { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:7px; vertical-align:middle; }
+  .ct-bar-wrap { width:120px; }
+  .ct-bar-track { height:5px; background:#EDE9E3; border-radius:3px; overflow:hidden; }
+  .ct-bar-fill  { height:100%; border-radius:3px; }
+  .ct-status { font-size:9px; font-weight:600; letter-spacing:0.08em; }
+  .ct-status.ok   { color:#065F46; }
+  .ct-status.warn { color:#92400E; }
+  .ct-status.over { color:#8B1A1A; }
+
+  /* Day chart */
+  .day-chart { display:flex; gap:8px; align-items:flex-end; margin-bottom:24px; height:80px; }
+  .dc-col    { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .dc-bar    { width:100%; border-radius:3px 3px 0 0; min-height:3px; }
+  .dc-label  { font-size:8px; color:#9A9590; letter-spacing:0.06em; text-transform:uppercase; }
+  .dc-today .dc-label { color:#C9A84C; font-weight:600; }
+
+  /* Debt section */
+  .debt-list { display:flex; flex-direction:column; gap:8px; margin-bottom:24px; }
+  .debt-row  { background:#F8F6F2; border-radius:8px; padding:12px 14px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .dr-name   { font-size:12px; font-weight:600; color:#1A1A1A; margin-bottom:2px; }
+  .dr-type   { font-size:10px; color:#9A9590; }
+  .dr-bar-wrap { flex:1; }
+  .dr-track  { height:5px; background:#EDE9E3; border-radius:3px; overflow:hidden; }
+  .dr-fill   { height:100%; border-radius:3px; background:#8B1A1A; }
+  .dr-pct    { font-size:10px; color:#8B1A1A; font-weight:600; margin-top:3px; }
+  .dr-remain { font-size:13px; font-weight:700; color:#1A1A1A; text-align:right; white-space:nowrap; }
+
+  /* Savings */
+  .savings-row { background:#F0F9F4; border:1px solid #C6F0DA; border-radius:8px; padding:14px 16px; display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .sv-name  { font-size:12px; font-weight:600; color:#1A1A1A; margin-bottom:2px; }
+  .sv-track { height:5px; background:#EDE9E3; border-radius:3px; overflow:hidden; width:100px; margin-top:4px; }
+  .sv-fill  { height:100%; border-radius:3px; background:#1A5C2E; }
+  .sv-amt   { font-size:13px; font-weight:700; color:#065F46; text-align:right; }
+  .sv-goal  { font-size:10px; color:#9A9590; text-align:right; margin-top:2px; }
+
+  /* Wins & focus */
+  .wf-grid  { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:24px; }
+  .wf-card  { border-radius:8px; padding:14px; }
+  .wf-card.wins  { background:#F0F9F4; border:1px solid #C6F0DA; }
+  .wf-card.focus { background:#FEF3F2; border:1px solid #FECACA; }
+  .wf-title { font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; margin-bottom:10px; }
+  .wf-card.wins  .wf-title { color:#065F46; }
+  .wf-card.focus .wf-title { color:#8B1A1A; }
+  .wf-item  { font-size:11px; color:#4A4A4A; margin-bottom:6px; padding-left:14px; position:relative; line-height:1.5; }
+  .wf-item::before { content:''; position:absolute; left:0; top:7px; width:6px; height:6px; border-radius:50%; }
+  .wf-card.wins  .wf-item::before { background:#065F46; }
+  .wf-card.focus .wf-item::before { background:#8B1A1A; }
+
+  /* Coach note */
+  .coach-note { background:#F8F6F2; border-left:3px solid #C9A84C; border-radius:0 8px 8px 0; padding:14px 16px; margin-bottom:24px; }
+  .cn-label { font-size:8px; font-weight:700; letter-spacing:0.18em; text-transform:uppercase; color:#C9A84C; margin-bottom:8px; }
+  .cn-text  { font-size:12px; color:#3A3A3A; line-height:1.7; font-style:italic; }
+  .cn-sig   { font-size:10px; color:#9A9590; margin-top:8px; }
+
+  /* Score */
+  .score-band { background:#080808; padding:16px 36px; display:flex; align-items:center; justify-content:space-between; }
+  .sb-label   { font-size:9px; letter-spacing:0.16em; text-transform:uppercase; color:#5A5550; margin-bottom:4px; }
+  .sb-score   { font-size:32px; font-weight:700; color:#C9A84C; letter-spacing:-0.02em; }
+  .sb-desc    { font-size:11px; color:#7A7470; max-width:240px; line-height:1.5; }
+
+  /* Footer */
+  .rpt-footer { background:#080808; padding:16px 36px; display:flex; align-items:center; justify-content:space-between; }
+  .rf-brand   { font-family:'Alex Brush',cursive; font-size:20px; color:#C9A84C; }
+  .rf-conf    { font-size:8px; letter-spacing:0.14em; text-transform:uppercase; color:#3A3A3A; }
+  .rf-page    { font-size:9px; color:#5A5550; }
+
+</style>
+</head>
+<body>
+
+<div class="preview-shell">
+
+  <!-- Controls (hidden on print) -->
+  <div class="controls">
+    <div class="ctrl-title">G&amp;G</div>
+    <div class="ctrl-sub">PDF Report Generator</div>
+
+    <div class="ctrl-row">
+      <div class="ctrl-label">Client Name</div>
+      <input class="ctrl-input" type="text" id="ctrl-name" value="Maria Gonzalez">
+    </div>
+
+    <div class="ctrl-row">
+      <div class="ctrl-label">Report Period</div>
+      <div class="period-btns">
+        <div class="period-btn active" onclick="setPeriod('weekly',this)">Weekly</div>
+        <div class="period-btn" onclick="setPeriod('monthly',this)">Monthly</div>
+        <div class="period-btn" onclick="setPeriod('quarterly',this)">Quarterly</div>
+      </div>
+    </div>
+
+    <div class="ctrl-row">
+      <div class="ctrl-label">Client Status</div>
+      <select class="ctrl-select" id="ctrl-status" onchange="buildReport()">
+        <option value="good">On Track</option>
+        <option value="risk">At Risk</option>
+        <option value="over">Over Budget</option>
+      </select>
+    </div>
+
+    <div class="ctrl-row">
+      <div class="ctrl-label">Coach Note (optional)</div>
+      <input class="ctrl-input" type="text" id="ctrl-note" placeholder="Add a personal note for this client...">
+    </div>
+
+    <button class="print-btn" onclick="window.print()">📄 &nbsp; Print / Save as PDF</button>
+  </div>
+
+  <!-- Report (what gets printed) -->
+  <div class="report-preview">
+    <div class="report" id="report"></div>
+  </div>
+
+</div>
+
+<script>
+var currentPeriod = 'weekly';
+
+var periodData = {
+  weekly: {
+    label:    'Week of June 1 – June 7, 2025',
+    spent:    776,   budget: 1400,  saved:  64,  debt: 149,
+    score:    75,    scoreLabel: 'Great Progress!',
+    days:     [{d:'Mon',a:210},{d:'Tue',a:85},{d:'Wed',a:320},{d:'Thu',a:95},{d:'Fri',a:0},{d:'Sat',a:0},{d:'Sun',a:0}],
+    wins:     ['Logged every single day','Stayed under Wants budget','Made extra debt payment','Emergency fund growing'],
+    focus:    ['Increase savings rate','Review Fixed expenses','Stay consistent next week'],
+  },
+  monthly: {
+    label:    'June 2025',
+    spent:    2890,  budget: 4200,  saved: 256,  debt: 596,
+    score:    82,    scoreLabel: 'Strong Month!',
+    days:     [{d:'Wk 1',a:720},{d:'Wk 2',a:890},{d:'Wk 3',a:640},{d:'Wk 4',a:640}],
+    wins:     ['Consistent daily logging','Under budget on Wants','Savings rate improving','3 debts on track'],
+    focus:    ['Build emergency fund faster','Reduce dining expenses'],
+  },
+  quarterly: {
+    label:    'April – June 2025',
+    spent:    8240,  budget:12600,  saved: 820,  debt:1788,
+    score:    79,    scoreLabel: 'Solid Quarter!',
+    days:     [{d:'April',a:2950},{d:'May',a:2800},{d:'June',a:2490}],
+    wins:     ['Savings up 40% vs last quarter','Debt balance reduced','Longest streak achieved','Budget discipline improving'],
+    focus:    ['Hit emergency fund goal','Accelerate debt snowball'],
+  },
+};
+
+var cats = [
+  { name:'Debt Payoff', color:'#8B1A1A', spent:149,  budget:240  },
+  { name:'Savings',     color:'#1A5C2E', spent:64,   budget:200  },
+  { name:'Wants',       color:'#C8B48A', spent:173,  budget:360  },
+  { name:'Fixed',       color:'#C97A2A', spent:390,  budget:600  },
+];
+
+var debts = [
+  { name:'Store Card',    type:'Credit Card',  balance:480,  paid:320  },
+  { name:'Medical Bill',  type:'Medical',      balance:850,  paid:200  },
+  { name:'Personal Loan', type:'Personal Loan',balance:2400, paid:600  },
+];
+
+var savings = [
+  { name:'Emergency Fund',  current:320,  goal:1000 },
+  { name:'Vacation Fund',   current:450,  goal:2000 },
+];
+
+function setPeriod(p, btn) {
+  currentPeriod = p;
+  document.querySelectorAll('.period-btn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  buildReport();
+}
+
+function buildReport() {
+  var name   = document.getElementById('ctrl-name').value || 'Client';
+  var status = document.getElementById('ctrl-status').value;
+  var note   = document.getElementById('ctrl-note').value;
+  var pd     = periodData[currentPeriod];
+  var rem    = Math.max(0, pd.budget - pd.spent);
+  var today  = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+
+  var statusLabels = { good:'On Track', risk:'At Risk', over:'Over Budget' };
+  var statusClass  = status;
+
+  var maxAmt = 0;
+  pd.days.forEach(function(d){ if(d.a > maxAmt) maxAmt = d.a; });
+  if(maxAmt === 0) maxAmt = 1;
+
+  var html = '';
+
+  // Header
+  html += '<div class="rpt-header">';
+  html += '<div class="rh-brand"><div class="rh-script">G&amp;G</div><div class="rh-sub">Wealth Management</div></div>';
+  html += '<div class="rh-right"><div class="rh-report-type">' + currentPeriod.charAt(0).toUpperCase() + currentPeriod.slice(1) + ' Report</div><div class="rh-period">' + pd.label + '</div><div class="rh-date">Generated ' + today + '</div></div>';
+  html += '</div>';
+  html += '<div class="gold-bar"></div>';
+
+  // Client band
+  html += '<div class="client-band">';
+  html += '<div class="cb-left"><div class="cb-name">' + name + '</div><div class="cb-meta">G&amp;G Wealth Management Client</div></div>';
+  html += '<div class="cb-right"><div class="status-pill ' + statusClass + '">' + statusLabels[status] + '</div></div>';
+  html += '</div>';
+
+  // Body
+  html += '<div class="rpt-body">';
+
+  // Summary
+  html += '<div class="rpt-section-title">Budget Summary</div>';
+  html += '<div class="summary-grid">';
+  html += '<div class="sg-card"><div class="sg-label">Total Spent</div><div class="sg-value ' + (pd.spent > pd.budget ? 'rd' : '') + '">$' + pd.spent.toLocaleString() + '</div></div>';
+  html += '<div class="sg-card"><div class="sg-label">Remaining</div><div class="sg-value ' + (rem <= 0 ? 'rd' : 'gn') + '">$' + rem.toLocaleString() + '</div></div>';
+  html += '<div class="sg-card"><div class="sg-label">Total Saved</div><div class="sg-value gd">$' + pd.saved.toLocaleString() + '</div></div>';
+  html += '<div class="sg-card"><div class="sg-label">Debt Paid</div><div class="sg-value">$' + pd.debt.toLocaleString() + '</div></div>';
+  html += '</div>';
+
+  // Category breakdown
+  html += '<div class="rpt-section-title">Category Breakdown</div>';
+  html += '<table class="cat-table"><thead><tr><th>Category</th><th>Spent</th><th>Budget</th><th>Progress</th><th>Status</th></tr></thead><tbody>';
+  cats.forEach(function(cat) {
+    var pct  = Math.min(100, Math.round((cat.spent / cat.budget) * 100));
+    var over = cat.spent > cat.budget;
+    var warn = !over && pct >= 80;
+    var statusTxt = over ? 'Over' : (warn ? 'At Risk' : 'On Track');
+    var statusCls = over ? 'over' : (warn ? 'warn' : 'ok');
+    html += '<tr>';
+    html += '<td><span class="cat-dot-sm" style="background:' + cat.color + '"></span>' + cat.name + '</td>';
+    html += '<td><strong>$' + cat.spent.toLocaleString() + '</strong></td>';
+    html += '<td>$' + cat.budget.toLocaleString() + '</td>';
+    html += '<td class="ct-bar-wrap"><div class="ct-bar-track"><div class="ct-bar-fill" style="width:' + pct + '%;background:' + cat.color + '"></div></div></td>';
+    html += '<td><span class="ct-status ' + statusCls + '">' + statusTxt + '</span></td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+
+  // Day chart
+  html += '<div class="rpt-section-title">Spending by ' + (currentPeriod === 'weekly' ? 'Day' : (currentPeriod === 'monthly' ? 'Week' : 'Month')) + '</div>';
+  html += '<div class="day-chart">';
+  pd.days.forEach(function(d, i) {
+    var h = d.a > 0 ? Math.max(10, Math.round((d.a / maxAmt) * 68)) : 4;
+    var isLast = currentPeriod === 'weekly' && i === 3;
+    html += '<div class="dc-col' + (isLast ? ' dc-today' : '') + '">';
+    html += '<div class="dc-bar" style="height:' + h + 'px;background:' + (isLast ? '#C9A84C' : (d.a > 0 ? '#D4C5A0' : '#EDE9E3')) + '"></div>';
+    html += '<div class="dc-label">' + d.d + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Debt
+  html += '<div class="rpt-section-title">Debt Snowball Progress</div>';
+  html += '<div class="debt-list">';
+  debts.forEach(function(d) {
+    var pct = Math.min(100, Math.round((d.paid / d.balance) * 100));
+    var rem = d.balance - d.paid;
+    html += '<div class="debt-row">';
+    html += '<div><div class="dr-name">' + d.name + '</div><div class="dr-type">' + d.type + '</div></div>';
+    html += '<div class="dr-bar-wrap"><div class="dr-track"><div class="dr-fill" style="width:' + pct + '%"></div></div><div class="dr-pct">' + pct + '% paid</div></div>';
+    html += '<div class="dr-remain">$' + rem.toLocaleString() + '<br><span style="font-size:9px;color:#9A9590">remaining</span></div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Savings
+  html += '<div class="rpt-section-title">Savings Goals</div>';
+  savings.forEach(function(s) {
+    var pct = Math.min(100, Math.round((s.current / s.goal) * 100));
+    html += '<div class="savings-row">';
+    html += '<div><div class="sv-name">' + s.name + '</div><div class="sv-track"><div class="sv-fill" style="width:' + pct + '%"></div></div></div>';
+    html += '<div><div class="sv-amt">$' + s.current.toLocaleString() + '</div><div class="sv-goal">of $' + s.goal.toLocaleString() + ' goal</div></div>';
+    html += '</div>';
+  });
+
+  // Wins & Focus
+  html += '<div class="rpt-section-title" style="margin-top:20px">Period Review</div>';
+  html += '<div class="wf-grid">';
+  html += '<div class="wf-card wins"><div class="wf-title">Wins This Period</div>';
+  pd.wins.forEach(function(w){ html += '<div class="wf-item">' + w + '</div>'; });
+  html += '</div>';
+  html += '<div class="wf-card focus"><div class="wf-title">Areas to Focus On</div>';
+  pd.focus.forEach(function(f){ html += '<div class="wf-item">' + f + '</div>'; });
+  html += '</div></div>';
+
+  // Coach note
+  if(note) {
+    html += '<div class="coach-note"><div class="cn-label">📌 Note from Your Coach</div><div class="cn-text">"' + note + '"</div><div class="cn-sig">— Gustavo &amp; Greys, G&amp;G Wealth Management</div></div>';
+  }
+
+  html += '</div>'; // end rpt-body
+
+  // Score band
+  html += '<div class="score-band">';
+  html += '<div><div class="sb-label">Period Score</div><div class="sb-score">' + pd.score + '/100</div></div>';
+  html += '<div class="sb-desc">' + pd.scoreLabel + ' Keep building on this momentum every single week.</div>';
+  html += '</div>';
+
+  // Footer
+  html += '<div class="rpt-footer">';
+  html += '<div class="rf-brand">G&amp;G</div>';
+  html += '<div class="rf-conf">Confidential · G&amp;G Wealth Management</div>';
+  html += '<div class="rf-page">Page 1 of 1</div>';
+  html += '</div>';
+
+  document.getElementById('report').innerHTML = html;
+}
+
+// Init
+buildReport();
+
+// Live update on name/note change
+document.getElementById('ctrl-name').addEventListener('input', buildReport);
+document.getElementById('ctrl-note').addEventListener('input', buildReport);
+</script>
+</body>
+</html>

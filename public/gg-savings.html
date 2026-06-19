@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G&G — Savings</title>
+<link href="https://fonts.googleapis.com/css2?family=Alex+Brush&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root {
+    --black:#080808; --card:#111111;
+    --gold:#C9A84C; --gold-light:#E2C472; --gold-dim:#7A6230;
+    --white:#F0EDE8; --muted:#5A5550; --border:rgba(201,168,76,0.15);
+    --savings:#1A5C2E; --savings-light:#3DAA68;
+  }
+  html,body { background:var(--black); font-family:'Inter',sans-serif; color:var(--white); min-height:100vh; display:flex; justify-content:center;  overscroll-behavior-x:none;}
+  #sparkle-canvas { position:fixed; inset:0; pointer-events:none; z-index:0; opacity:0.4; }
+  .app { position:relative; z-index:1; width:100%; max-width:390px; min-height:100vh; display:flex; flex-direction:column; padding-bottom:96px; }
+
+  /* Header */
+  .header { display:flex; align-items:center; justify-content:space-between; padding:52px 24px 20px; }
+  .page-title { font-family:'Alex Brush',cursive; font-size:36px; color:var(--gold); line-height:1; }
+  .page-sub   { font-size:10px; color:var(--muted); letter-spacing:0.14em; text-transform:uppercase; margin-top:2px; }
+
+  /* Total savings hero card */
+  .hero-card {
+    margin:0 20px 16px;
+    background:var(--card); border:1px solid var(--border);
+    border-radius:16px; padding:24px 20px;
+    text-align:center; position:relative; overflow:hidden;
+  }
+  .hero-card::before {
+    content:''; position:absolute; top:-40px; left:50%; transform:translateX(-50%);
+    width:200px; height:200px;
+    background:radial-gradient(ellipse,rgba(26,92,46,0.12) 0%,transparent 70%);
+    pointer-events:none;
+  }
+  .hero-label  { font-size:9px; letter-spacing:0.24em; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
+  .hero-amount { font-size:48px; font-weight:700; color:var(--savings-light); letter-spacing:-0.03em; line-height:1; text-shadow:0 0 30px rgba(61,170,104,0.25); }
+  .hero-sub    { font-size:11px; color:var(--muted); margin-top:8px; }
+  .hero-sub span { color:var(--gold); font-weight:600; }
+
+  /* Monthly trend row */
+  .trend-row {
+    display:grid; grid-template-columns:1fr 1fr 1fr;
+    gap:10px; margin:0 20px 16px;
+  }
+  .trend-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; text-align:center; }
+  .tc-label  { font-size:9px; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+  .tc-value  { font-size:18px; font-weight:700; color:var(--white); letter-spacing:-0.02em; }
+  .tc-value.green { color:var(--savings-light); }
+  .tc-value.gold  { color:var(--gold-light); }
+
+  /* Section label */
+  .section-label { font-size:9px; letter-spacing:0.22em; text-transform:uppercase; color:var(--muted); padding:0 20px 12px; }
+
+  /* Emergency fund card */
+  .ef-card {
+    margin:0 20px 12px;
+    background:var(--card); border:1px solid rgba(201,168,76,0.25);
+    border-radius:14px; padding:18px;
+  }
+  .ef-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .ef-icon-wrap { display:flex; align-items:center; gap:10px; }
+  .ef-icon { font-size:24px; }
+  .ef-name { font-size:14px; font-weight:600; color:var(--white); }
+  .ef-type { font-size:10px; color:var(--muted); margin-top:2px; }
+  .ef-amounts { text-align:right; }
+  .ef-current  { font-size:20px; font-weight:700; color:var(--savings-light); letter-spacing:-0.02em; line-height:1; }
+  .ef-goal     { font-size:10px; color:var(--muted); margin-top:3px; }
+
+  .ef-progress { margin-bottom:12px; }
+  .ef-track { height:8px; background:rgba(255,255,255,0.05); border-radius:4px; overflow:hidden; margin-bottom:6px; }
+  .ef-fill  { height:100%; border-radius:4px; background:linear-gradient(90deg,#1A5C2E,#3DAA68); transition:width 1s cubic-bezier(.4,0,.2,1); }
+  .ef-labels { display:flex; justify-content:space-between; }
+  .ef-pct     { font-size:10px; font-weight:600; color:var(--savings-light); }
+  .ef-remain  { font-size:10px; color:var(--muted); }
+
+  .ef-bottom { display:flex; align-items:center; justify-content:space-between; }
+  .ef-meta { display:flex; gap:16px; }
+  .em-item  { display:flex; flex-direction:column; gap:2px; }
+  .em-label { font-size:8px; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); }
+  .em-value { font-size:12px; font-weight:600; color:var(--white); }
+  .add-btn {
+    background:rgba(26,92,46,0.15); border:1px solid rgba(61,170,104,0.3);
+    border-radius:8px; color:var(--savings-light); cursor:pointer;
+    font-family:'Inter',sans-serif; font-size:10px; font-weight:600;
+    letter-spacing:0.14em; text-transform:uppercase; padding:9px 14px;
+    transition:background 0.2s;
+  }
+  .add-btn:hover { background:rgba(26,92,46,0.25); }
+
+  /* Savings goal cards */
+  .goal-list { display:flex; flex-direction:column; gap:10px; margin:0 20px; }
+
+  .goal-card {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:14px; padding:16px;
+    cursor:pointer; transition:border-color 0.2s;
+    animation:fadeIn 0.4s ease both;
+    position:relative;
+  }
+  .goal-card:hover { border-color:rgba(201,168,76,0.3); }
+  .goal-card.complete { border-color:rgba(26,92,46,0.4); background:rgba(26,92,46,0.05); }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+  .complete-ribbon { position:absolute; top:0; right:0; background:var(--savings); color:var(--white); font-size:8px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; padding:4px 10px; border-radius:0 14px 0 8px; }
+
+  .gc-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .gc-left { display:flex; align-items:center; gap:10px; }
+  .gc-icon { width:38px; height:38px; border-radius:11px; background:rgba(26,92,46,0.15); display:flex; align-items:center; justify-content:center; font-size:20px; }
+  .gc-name { font-size:13px; font-weight:600; color:var(--white); margin-bottom:3px; }
+  .goal-card.complete .gc-name { color:var(--muted); }
+  .gc-desc { font-size:10px; color:var(--muted); }
+  .gc-right { text-align:right; }
+  .gc-current { font-size:17px; font-weight:700; color:var(--white); letter-spacing:-0.02em; line-height:1; }
+  .goal-card.complete .gc-current { color:var(--muted); }
+  .gc-goal    { font-size:10px; color:var(--muted); margin-top:3px; }
+
+  .gc-track { height:5px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden; margin-bottom:8px; }
+  .gc-fill  { height:100%; border-radius:3px; transition:width 0.8s ease; }
+
+  .gc-bottom { display:flex; align-items:center; justify-content:space-between; }
+  .gc-pct    { font-size:10px; font-weight:600; color:var(--savings-light); }
+  .goal-card.complete .gc-pct { color:#3DAA68; }
+  .gc-date   { font-size:10px; color:var(--muted); }
+
+  /* Add goal FAB */
+  .add-goal-fab { margin:16px 20px 0; width:calc(100% - 40px); background:rgba(201,168,76,0.07); border:1px dashed rgba(201,168,76,0.25); border-radius:12px; color:var(--gold); cursor:pointer; font-family:'Inter',sans-serif; font-size:11px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; padding:14px; transition:background 0.2s; }
+  .add-goal-fab:hover { background:rgba(201,168,76,0.12); }
+
+  /* Modals */
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:20; display:flex; align-items:center; justify-content:center; padding:24px; opacity:0; pointer-events:none; transition:opacity 0.25s; }
+  .modal-overlay.open { opacity:1; pointer-events:all; }
+  .modal { width:100%; max-width:340px; background:#141414; border:1px solid var(--border); border-radius:20px; padding:24px 24px 28px; }
+  .modal-title { font-size:15px; font-weight:600; color:var(--white); margin-bottom:18px; }
+
+  .input-label { font-size:9px; letter-spacing:0.2em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; display:block; margin-top:8px; }
+  .text-input { width:100%; background:#0A0A0A; border:1px solid var(--border); border-radius:10px; color:var(--white); font-family:'Inter',sans-serif; font-size:13px; padding:11px 14px; outline:none; margin-bottom:4px; transition:border-color 0.2s; }
+  .text-input::placeholder { color:var(--muted); }
+  .text-input:focus { border-color:rgba(201,168,76,0.45); }
+  .amount-wrap { background:#0A0A0A; border:1px solid var(--border); border-radius:10px; padding:10px 14px; display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+  .currency { font-size:20px; font-weight:700; color:var(--gold); }
+  .big-input { background:transparent; border:none; outline:none; color:var(--white); font-family:'Inter',sans-serif; font-size:22px; font-weight:700; width:100%; }
+  .big-input::placeholder { color:rgba(255,255,255,0.15); }
+  .big-input::-webkit-outer-spin-button,.big-input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .big-input[type=number] { -moz-appearance:textfield; }
+
+  .save-btn { width:100%; background:linear-gradient(135deg,#B8923E,#E2C472,#B8923E); background-size:200%; border:none; border-radius:10px; color:#080808; cursor:pointer; font-family:'Inter',sans-serif; font-size:11px; font-weight:700; letter-spacing:0.24em; text-transform:uppercase; padding:16px; margin-top:14px; animation:shimmer 3s ease-in-out infinite; transition:transform 0.15s; }
+  .save-btn:hover { transform:translateY(-1px); }
+  @keyframes shimmer { 0%,100%{background-position:0%} 50%{background-position:100%} }
+  .close-btn { width:100%; background:transparent; border:1px solid rgba(255,255,255,0.08); border-radius:10px; color:var(--muted); cursor:pointer; font-family:'Inter',sans-serif; font-size:11px; font-weight:500; letter-spacing:0.18em; text-transform:uppercase; padding:13px; margin-top:10px; transition:border-color 0.2s, color 0.2s; }
+  .close-btn:hover { border-color:rgba(201,168,76,0.3); color:var(--gold); }
+  .delete-btn { width:100%; background:transparent; border:1px solid rgba(139,26,26,0.3); border-radius:10px; color:#8B1A1A; cursor:pointer; font-family:'Inter',sans-serif; font-size:11px; font-weight:500; letter-spacing:0.18em; text-transform:uppercase; padding:13px; margin-top:10px; transition:background 0.2s; }
+  .delete-btn:hover { background:rgba(139,26,26,0.1); }
+
+  /* Celebrate */
+  .celebrate { position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:30; display:flex; flex-direction:column; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.3s; padding:24px; text-align:center; }
+  .celebrate.show { opacity:1; pointer-events:all; }
+  .cel-icon  { font-size:60px; margin-bottom:18px; animation:pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+  .cel-title { font-family:'Alex Brush',cursive; font-size:44px; color:var(--gold); margin-bottom:8px; }
+  .cel-sub   { font-size:12px; color:var(--muted); line-height:1.7; margin-bottom:6px; }
+  .cel-name  { font-size:15px; font-weight:600; color:var(--white); margin-bottom:24px; }
+  .cel-btn   { background:linear-gradient(135deg,#B8923E,#E2C472,#B8923E); background-size:200%; border:none; border-radius:10px; color:#080808; cursor:pointer; font-family:'Inter',sans-serif; font-size:11px; font-weight:700; letter-spacing:0.24em; text-transform:uppercase; padding:16px 40px; animation:shimmer 3s ease-in-out infinite; }
+
+  /* Bottom nav */
+  .bottom-nav { position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:390px; background:rgba(8,8,8,0.97); border-top:1px solid var(--border); display:grid; grid-template-columns:repeat(5,1fr); padding:10px 0 22px; z-index:10; backdrop-filter:blur(12px); }
+  .nav-item { display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; opacity:0.38; transition:opacity 0.2s; }
+  .nav-item.active { opacity:1; }
+  .nav-icon  { font-size:20px; }
+  .nav-label { font-size:9px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); font-weight:500; }
+  .nav-item.active .nav-label { color:var(--gold); }
+  .nav-add { display:flex; flex-direction:column; align-items:center; cursor:pointer; margin-top:-22px; }
+  .nav-add-circle { width:54px; height:54px; border-radius:50%; background:linear-gradient(135deg,#B8923E,#E2C472,#B8923E); background-size:200%; display:flex; align-items:center; justify-content:center; font-size:28px; color:#080808; animation:addGlow 3s ease-in-out infinite; transition:transform 0.15s; }
+  @keyframes addGlow { 0%,100%{box-shadow:0 0 12px rgba(201,168,76,0.3);background-position:0%} 50%{box-shadow:0 0 26px rgba(226,196,114,0.55);background-position:100%} }
+</style>
+<script defer src="/theme.js"></script>
+<script defer src="/coach-mode.js"></script>
+<script defer src="/swipe-lock.js"></script>
+<script defer src="/nav-notify.js"></script>
+</head>
+<body>
+<canvas id="sparkle-canvas"></canvas>
+
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <div class="page-title">Savings</div>
+      <div class="page-sub">Your Financial Future</div>
+    </div>
+  </div>
+
+  <!-- Hero total -->
+  <div class="hero-card">
+    <div class="hero-label">Total Saved</div>
+    <div class="hero-amount" id="hero-amount">$0</div>
+    <div class="hero-sub">Across <span id="goal-count">0</span> savings goals</div>
+  </div>
+
+  <!-- Trend row -->
+  <div class="trend-row">
+    <div class="trend-card">
+      <div class="tc-label">This Week</div>
+      <div class="tc-value green" id="week-saved">$0</div>
+    </div>
+    <div class="trend-card">
+      <div class="tc-label">This Month</div>
+      <div class="tc-value green" id="month-saved">$0</div>
+    </div>
+    <div class="trend-card">
+      <div class="tc-label">Goals Met</div>
+      <div class="tc-value gold" id="goals-met">0</div>
+    </div>
+  </div>
+
+  <!-- Emergency Fund -->
+  <div class="section-label">Emergency Fund</div>
+  <div class="ef-card" id="ef-card">
+    <div class="ef-top">
+      <div class="ef-icon-wrap">
+        <div class="ef-icon">🛡️</div>
+        <div>
+          <div class="ef-name">Emergency Fund</div>
+          <div class="ef-type">Priority Goal</div>
+        </div>
+      </div>
+      <div class="ef-amounts">
+        <div class="ef-current" id="ef-current">$320</div>
+        <div class="ef-goal">of <span id="ef-goal-display">$1,000</span></div>
+      </div>
+    </div>
+    <div class="ef-progress">
+      <div class="ef-track"><div class="ef-fill" id="ef-fill" style="width:32%"></div></div>
+      <div class="ef-labels">
+        <span class="ef-pct" id="ef-pct">32% funded</span>
+        <span class="ef-remain" id="ef-remain">$680 to go</span>
+      </div>
+    </div>
+    <div class="ef-bottom">
+      <div class="ef-meta">
+        <div class="em-item">
+          <span class="em-label">Weekly Add</span>
+          <span class="em-value" id="ef-weekly">$64</span>
+        </div>
+        <div class="em-item">
+          <span class="em-label">Est. Complete</span>
+          <span class="em-value" id="ef-date">Nov 2025</span>
+        </div>
+      </div>
+      <button class="add-btn" onclick="openEFModal()">+ Add</button>
+    </div>
+  </div>
+
+  <!-- Other savings goals -->
+  <div class="section-label" style="margin-top:8px">Savings Goals</div>
+  <div class="goal-list" id="goal-list"></div>
+  <button class="add-goal-fab" onclick="openGoalModal()">+ Add New Savings Goal</button>
+
+</div>
+
+<!-- Emergency Fund deposit modal -->
+<div class="modal-overlay" id="ef-modal" onclick="closeEFOut(event)">
+  <div class="modal">
+    <div class="modal-title">Add to Emergency Fund</div>
+    <span class="input-label">Amount to Add</span>
+    <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="ef-add-amount" placeholder="0.00" inputmode="decimal"></div>
+    <span class="input-label">Change Goal Amount</span>
+    <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="ef-goal-input" placeholder="1000.00" inputmode="decimal"></div>
+    <button class="save-btn" onclick="saveEF()">Save</button>
+    <button class="close-btn" onclick="closeEFModal()">✕ &nbsp; Close</button>
+  </div>
+</div>
+
+<!-- Add Goal modal -->
+<div class="modal-overlay" id="goal-modal" onclick="closeGoalOut(event)">
+  <div class="modal">
+    <div class="modal-title">New Savings Goal</div>
+    <span class="input-label">Goal Name</span>
+    <input class="text-input" type="text" id="g-name" placeholder="e.g. Vacation, New Car...">
+    <span class="input-label">Goal Amount</span>
+    <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="g-goal" placeholder="0.00" inputmode="decimal"></div>
+    <span class="input-label">Amount Already Saved</span>
+    <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="g-saved" placeholder="0.00" inputmode="decimal"></div>
+    <span class="input-label">Weekly Contribution</span>
+    <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="g-weekly" placeholder="0.00" inputmode="decimal"></div>
+    <button class="save-btn" onclick="saveGoal()">Add Goal</button>
+    <button class="close-btn" onclick="closeGoalModal()">✕ &nbsp; Close</button>
+  </div>
+</div>
+
+<!-- Edit Goal modal -->
+<div class="modal-overlay" id="edit-goal-modal" onclick="closeEditGoalOut(event)">
+  <div class="modal">
+    <div class="modal-title">Edit Goal</div>
+    <span class="input-label">Goal Name</span>
+    <input class="text-input" type="text" id="eg-name" placeholder="Goal name">
+    <span class="input-label">Goal Amount</span>
+    <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="eg-goal" placeholder="0.00" inputmode="decimal"></div>
+    <span class="input-label">Amount Saved So Far</span>
+    <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="eg-saved" placeholder="0.00" inputmode="decimal"></div>
+    <span class="input-label">Weekly Contribution</span>
+    <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="eg-weekly" placeholder="0.00" inputmode="decimal"></div>
+    <button class="save-btn" onclick="saveEditGoal()">Save Changes</button>
+    <button class="delete-btn" onclick="deleteGoal()">🗑 &nbsp; Delete This Goal</button>
+    <button class="close-btn" onclick="closeEditGoalModal()">✕ &nbsp; Close</button>
+  </div>
+</div>
+
+<!-- Celebration -->
+<div class="celebrate" id="celebrate">
+  <div class="cel-icon">✨</div>
+  <div class="cel-title">Goal Reached!</div>
+  <div class="cel-sub">You've successfully saved for</div>
+  <div class="cel-name" id="cel-name">—</div>
+  <div class="cel-sub">Every goal you hit builds the foundation<br>for your financial freedom.</div>
+  <br>
+  <button class="cel-btn" onclick="document.getElementById('celebrate').classList.remove('show')">Keep Saving ›</button>
+</div>
+
+<!-- Bottom nav -->
+<nav class="bottom-nav">
+  <div class="nav-item">
+    <span class="nav-icon">🏠</span>
+    <span class="nav-label">Home</span>
+  </div>
+  <div class="nav-item">
+    <span class="nav-icon">📋</span>
+    <span class="nav-label">Log</span>
+  </div>
+  <div class="nav-add">
+    <div class="nav-add-circle">+</div>
+  </div>
+  <div class="nav-item active">
+    <span class="nav-icon">💰</span>
+    <span class="nav-label">Savings</span>
+  </div>
+  <div class="nav-item">
+    <span class="nav-icon">💬</span>
+    <span class="nav-label">Coach</span>
+  </div>
+</nav>
+
+<script>
+// Auth guard
+fetch('/api/me').then(r => { if(!r.ok && !window._coachMode) window.location='/gg-login.html'; });
+
+let ef = { id: null, current: 0, goal: 1000, weekly: 25 };
+let goals = [];
+let editingGoalId = null;
+
+async function loadSavings() {
+  const data = await fetch('/api/savings').then(r=>r.json());
+  const efGoal = data.find(g => g.is_emergency);
+  const customGoals = data.filter(g => !g.is_emergency);
+  if (efGoal) {
+    ef = { id: efGoal.id, current: efGoal.current_amount, goal: efGoal.goal_amount, weekly: efGoal.weekly_contrib };
+  }
+  goals = customGoals.map(g => ({
+    id: g.id, name: g.name, icon: gIcon(g.name),
+    goal: g.goal_amount, saved: g.current_amount, weekly: g.weekly_contrib, complete: !!g.complete
+  }));
+  updateEF();
+  renderGoals();
+}
+loadSavings();
+
+const GOAL_ICONS = {'vacation':'✈️','car':'🚗','house':'🏠','laptop':'💻','computer':'💻','phone':'📱','emergency':'🛡️','wedding':'💍','baby':'👶','school':'🎓','business':'💼','default':'🎯'};
+function gIcon(name) {
+  const n = name.toLowerCase();
+  for(const[k,v] of Object.entries(GOAL_ICONS)) if(n.includes(k)) return v;
+  return GOAL_ICONS.default;
+}
+
+function projDate(remaining, weekly) {
+  if(remaining<=0) return 'Complete!';
+  if(!weekly||weekly<=0) return 'Set weekly amt';
+  const weeks = Math.ceil(remaining/weekly);
+  const d = new Date();
+  d.setDate(d.getDate() + weeks*7);
+  return d.toLocaleDateString('en-US',{month:'short',year:'numeric'});
+}
+
+function updateEF() {
+  const pct = Math.min(100, Math.round((ef.current/ef.goal)*100));
+  const remain = Math.max(0, ef.goal - ef.current);
+  document.getElementById('ef-current').textContent   = '$'+ef.current.toLocaleString();
+  document.getElementById('ef-goal-display').textContent = '$'+ef.goal.toLocaleString();
+  document.getElementById('ef-fill').style.width      = pct+'%';
+  document.getElementById('ef-pct').textContent       = pct+'% funded';
+  document.getElementById('ef-remain').textContent    = '$'+remain.toLocaleString()+' to go';
+  document.getElementById('ef-weekly').textContent    = '$'+ef.weekly;
+  document.getElementById('ef-date').textContent      = projDate(remain, ef.weekly);
+}
+
+function updateSummary() {
+  const totalSaved = ef.current + goals.reduce((s,g)=>s+g.saved,0);
+  const met        = goals.filter(g=>g.complete||g.saved>=g.goal).length;
+  document.getElementById('hero-amount').textContent  = '$'+totalSaved.toLocaleString();
+  document.getElementById('goal-count').textContent   = goals.length;
+  document.getElementById('week-saved').textContent   = '$'+(ef.weekly + goals.reduce((s,g)=>s+g.weekly,0));
+  document.getElementById('month-saved').textContent  = '$'+((ef.weekly + goals.reduce((s,g)=>s+g.weekly,0))*4);
+  document.getElementById('goals-met').textContent    = met;
+}
+
+function renderGoals() {
+  const list = document.getElementById('goal-list');
+  list.innerHTML = '';
+  goals.forEach((g,i) => {
+    const pct     = Math.min(100,Math.round((g.saved/g.goal)*100));
+    const remain  = Math.max(0,g.goal-g.saved);
+    const isDone  = g.complete || g.saved>=g.goal;
+    const barColor= isDone ? '#1A5C2E' : (pct>75?'#C9A84C':'#1A5C2E');
+
+    const card = document.createElement('div');
+    card.className = 'goal-card'+(isDone?' complete':'');
+    card.style.animationDelay = (i*0.06)+'s';
+    card.onclick = () => openEditGoalModal(g.id);
+    card.innerHTML = `
+      ${isDone?'<div class="complete-ribbon">✓ Goal Met</div>':''}
+      <div class="gc-top">
+        <div class="gc-left">
+          <div class="gc-icon">${g.icon||gIcon(g.name)}</div>
+          <div>
+            <div class="gc-name">${g.name}</div>
+            <div class="gc-desc">$${g.weekly}/week</div>
+          </div>
+        </div>
+        <div class="gc-right">
+          <div class="gc-current">$${g.saved.toLocaleString()}</div>
+          <div class="gc-goal">of $${g.goal.toLocaleString()}</div>
+        </div>
+      </div>
+      <div class="gc-track"><div class="gc-fill" style="width:${pct}%;background:${barColor}"></div></div>
+      <div class="gc-bottom">
+        <span class="gc-pct">${pct}% saved</span>
+        <span class="gc-date">${isDone?'🎉 Complete':'Est. '+projDate(remain,g.weekly)}</span>
+      </div>`;
+    list.appendChild(card);
+  });
+  updateSummary();
+}
+
+// EF Modal
+function openEFModal() {
+  document.getElementById('ef-goal-input').value = ef.goal;
+  document.getElementById('ef-modal').classList.add('open');
+}
+function closeEFOut(e) { if(e.target===document.getElementById('ef-modal')) closeEFModal(); }
+function closeEFModal() { document.getElementById('ef-modal').classList.remove('open'); }
+async function saveEF() {
+  const add  = parseFloat(document.getElementById('ef-add-amount').value)||0;
+  const goal = parseFloat(document.getElementById('ef-goal-input').value)||ef.goal;
+  const newCurrent = Math.min(goal, ef.current+add);
+  const res = await fetch('/api/savings/'+(ef.id||'ef'), {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({current_amount: newCurrent, goal_amount: goal, weekly_contrib: ef.weekly})
+  });
+  if(res.ok) {
+    ef.current = newCurrent; ef.goal = goal;
+    updateEF(); updateSummary();
+  }
+  closeEFModal();
+  document.getElementById('ef-add-amount').value='';
+}
+
+// Goal Modal
+function openGoalModal() { document.getElementById('goal-modal').classList.add('open'); }
+function closeGoalOut(e) { if(e.target===document.getElementById('goal-modal')) closeGoalModal(); }
+function closeGoalModal() {
+  document.getElementById('goal-modal').classList.remove('open');
+  ['g-name','g-goal','g-saved','g-weekly'].forEach(id=>document.getElementById(id).value='');
+}
+async function saveGoal() {
+  const name   = document.getElementById('g-name').value.trim();
+  const goal   = parseFloat(document.getElementById('g-goal').value)||0;
+  const saved  = parseFloat(document.getElementById('g-saved').value)||0;
+  const weekly = parseFloat(document.getElementById('g-weekly').value)||0;
+  if(!name||goal<=0){ alert('Please enter a name and goal amount.'); return; }
+  const res = await fetch('/api/savings', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name, goal_amount: goal, current_amount: saved, weekly_contrib: weekly})
+  });
+  if(res.ok) { await loadSavings(); }
+  closeGoalModal();
+}
+
+// Edit Goal Modal
+function openEditGoalModal(id) {
+  const g = goals.find(x=>x.id===id);
+  if(!g) return;
+  editingGoalId = id;
+  document.getElementById('eg-name').value   = g.name;
+  document.getElementById('eg-goal').value   = g.goal;
+  document.getElementById('eg-saved').value  = g.saved;
+  document.getElementById('eg-weekly').value = g.weekly;
+  document.getElementById('edit-goal-modal').classList.add('open');
+}
+function closeEditGoalOut(e) { if(e.target===document.getElementById('edit-goal-modal')) closeEditGoalModal(); }
+function closeEditGoalModal() { document.getElementById('edit-goal-modal').classList.remove('open'); editingGoalId=null; }
+async function saveEditGoal() {
+  const g = goals.find(x=>x.id===editingGoalId);
+  if(!g) return;
+  const name   = document.getElementById('eg-name').value.trim()||g.name;
+  const goal   = parseFloat(document.getElementById('eg-goal').value)||g.goal;
+  const saved  = parseFloat(document.getElementById('eg-saved').value)||0;
+  const weekly = parseFloat(document.getElementById('eg-weekly').value)||g.weekly;
+  const wasDone = g.complete;
+  const nowDone = saved >= goal;
+  const res = await fetch('/api/savings/'+editingGoalId, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name, goal_amount: goal, current_amount: saved, weekly_contrib: weekly})
+  });
+  if(res.ok) {
+    if(nowDone && !wasDone) {
+      document.getElementById('cel-name').textContent = name;
+      document.getElementById('celebrate').classList.add('show');
+    }
+    await loadSavings();
+  }
+  closeEditGoalModal();
+}
+async function deleteGoal() {
+  await fetch('/api/savings/'+editingGoalId, {method:'DELETE'});
+  closeEditGoalModal();
+  await loadSavings();
+}
+
+// Sparkle
+const canvas=document.getElementById('sparkle-canvas'),ctx=canvas.getContext('2d');
+function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
+resize();window.addEventListener('resize',resize);
+const SC=['rgba(226,196,114,','rgba(201,168,76,','rgba(240,237,232,'];
+class Sparkle{constructor(){this.reset();}reset(){this.x=Math.random()*canvas.width;this.y=Math.random()*canvas.height;this.size=Math.random()*1.3+0.3;this.ba=Math.random()*0.4+0.07;this.a=this.ba;this.ph=Math.random()*Math.PI*2;this.sp=Math.random()*0.015+0.006;this.c=SC[Math.floor(Math.random()*SC.length)];this.arms=Math.random()>0.65;}update(){this.ph+=this.sp;this.a=this.ba*(0.4+0.6*Math.abs(Math.sin(this.ph)));}draw(){ctx.save();ctx.globalAlpha=this.a;if(this.arms){ctx.strokeStyle=this.c+this.a+')';ctx.lineWidth=this.size*0.5;ctx.lineCap='round';const s=this.size*3;ctx.beginPath();ctx.moveTo(this.x-s,this.y);ctx.lineTo(this.x+s,this.y);ctx.moveTo(this.x,this.y-s);ctx.lineTo(this.x,this.y+s);ctx.stroke();}else{ctx.fillStyle=this.c+'1)';ctx.beginPath();ctx.arc(this.x,this.y,this.size,0,Math.PI*2);ctx.fill();}ctx.restore();}}
+const SP=Array.from({length:70},()=>new Sparkle());
+function animate(){ctx.clearRect(0,0,canvas.width,canvas.height);SP.forEach(s=>{s.update();s.draw();});requestAnimationFrame(animate);}
+animate();
+</script>
+
+<!-- ── User Menu ── -->
+<div id="umBtn" onclick="toggleUM()" style="position:fixed;top:14px;right:18px;z-index:100;width:34px;height:34px;border-radius:50%;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.25);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;font-weight:600;color:#C9A84C;font-family:Inter,sans-serif;letter-spacing:0;user-select:none"></div>
+<div id="umOverlay" onclick="if(event.target===this)toggleUM()" style="display:none;position:fixed;inset:0;background:rgba(8,8,8,0.78);z-index:200;align-items:center;justify-content:center;padding:0 20px">
+  <div style="background:#141414;border:1px solid rgba(201,168,76,0.22);border-radius:16px;padding:22px 20px;width:100%;max-width:350px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
+      <div id="umAvatar" style="width:42px;height:42px;border-radius:50%;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#C9A84C;font-family:Inter,sans-serif;flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div id="umName" style="font-size:15px;font-weight:600;color:#F0EDE8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+        <div id="umRole" style="font-size:10px;color:#5A5550;letter-spacing:0.1em;text-transform:uppercase;margin-top:2px"></div>
+      </div>
+      <div onclick="toggleUM()" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:#5A5550;flex-shrink:0">✕</div>
+    </div>
+    <div style="height:1px;background:rgba(201,168,76,0.1);margin-bottom:16px"></div>
+    <button id="umThemeBtn" onclick="toggleTheme()" style="width:100%;padding:13px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.15);border-radius:10px;color:#C9A84C;font-family:Inter,sans-serif;font-size:13px;font-weight:500;cursor:pointer;letter-spacing:0.04em;margin-bottom:8px">☀️  Light Mode</button>
+    <button onclick="doLogout()" style="width:100%;padding:13px;background:rgba(139,26,26,0.12);border:1px solid rgba(255,107,107,0.2);border-radius:10px;color:#FF6B6B;font-family:Inter,sans-serif;font-size:13px;font-weight:500;cursor:pointer;letter-spacing:0.04em">↩ &nbsp;Sign Out</button>
+  </div>
+</div>
+<script>
+function toggleUM(){var o=document.getElementById("umOverlay");o.style.display=o.style.display==="flex"?"none":"flex";}
+async function doLogout(){await fetch("/api/logout",{method:"POST"});window.location="/gg-login.html";}
+fetch("/api/me").then(r=>r.json()).then(u=>{
+  var initials=(u.name||u.username||"?").split(" ").map(function(w){return w[0];}).join("").toUpperCase().slice(0,2);
+  var btn=document.getElementById("umBtn");if(btn)btn.textContent=initials;
+  var av=document.getElementById("umAvatar");if(av)av.textContent=initials;
+  var nm=document.getElementById("umName");if(nm)nm.textContent=u.name||u.username;
+  var rl=document.getElementById("umRole");if(rl)rl.textContent=u.role==="coach"?"Financial Coach · G&G":"Budgeting Client";
+}).catch(function(){});
+</script>
+<script>
+// Nav wiring
+(function(){
+  var qs = window._coachMode ? "?clientId="+encodeURIComponent(window._coachClientId)+"&clientName="+encodeURIComponent(window._coachClientName) : "";
+  var pages = ["/gg-home.html", "/gg-daily-log.html", null, "/gg-advisor.html"];
+  document.querySelectorAll(".nav-item").forEach(function(el,i){
+    if(pages[i]) el.addEventListener("click", function(){ window.location = pages[i]+qs; });
+  });
+})();
+</script>
+</body>
+</html>

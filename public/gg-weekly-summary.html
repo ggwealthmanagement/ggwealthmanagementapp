@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G&G — Weekly Summary</title>
+<link href="https://fonts.googleapis.com/css2?family=Alex+Brush&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root {
+    --black:#080808; --card:#111111; --card2:#161616;
+    --gold:#C9A84C; --gold-light:#E2C472; --gold-dim:#7A6230;
+    --white:#F0EDE8; --muted:#5A5550; --border:rgba(201,168,76,0.15);
+    --fixed:#C97A2A; --wants:#C8B48A; --savings:#1A5C2E; --debt:#8B1A1A;
+    --green:#3DAA68;
+  }
+  html,body { background:var(--black); font-family:'Inter',sans-serif; color:var(--white); min-height:100vh; display:flex; justify-content:center;  overscroll-behavior-x:none;}
+  #sparkle-canvas { position:fixed; inset:0; pointer-events:none; z-index:0; opacity:0.35; }
+  .app { position:relative; z-index:1; width:100%; max-width:390px; min-height:100vh; display:flex; flex-direction:column; padding-bottom:40px; }
+
+  /* Header */
+  .header { padding:52px 24px 16px; display:flex; align-items:flex-start; justify-content:space-between; }
+  .page-title { font-family:'Alex Brush',cursive; font-size:36px; color:var(--gold); line-height:1; }
+  .page-sub   { font-size:10px; color:var(--muted); letter-spacing:0.14em; text-transform:uppercase; margin-top:2px; }
+
+  /* Period tabs */
+  .period-tabs { display:flex; gap:8px; padding:0 20px 18px; }
+  .period-tab {
+    flex:1; text-align:center; padding:9px 4px;
+    background:var(--card); border:1px solid var(--border);
+    border-radius:10px; cursor:pointer; font-size:11px;
+    font-weight:500; color:var(--muted);
+    transition:border-color 0.2s, background 0.2s, color 0.2s;
+  }
+  .period-tab.active { background:rgba(201,168,76,0.1); border-color:var(--gold); color:var(--white); }
+
+  /* Score card */
+  .score-card {
+    margin:0 20px 16px;
+    background:var(--card); border:1px solid var(--border);
+    border-radius:16px; padding:20px;
+    display:flex; align-items:center; gap:18px;
+  }
+  .score-ring { position:relative; width:80px; height:80px; flex-shrink:0; }
+  .score-ring svg { width:100%; height:100%; transform:rotate(-90deg); }
+  .score-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .score-num   { font-size:22px; font-weight:700; color:var(--gold-light); line-height:1; }
+  .score-label { font-size:7px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-top:2px; }
+  .score-info  { flex:1; }
+  .score-title { font-size:14px; font-weight:600; color:var(--white); margin-bottom:4px; }
+  .score-desc  { font-size:11px; color:var(--muted); line-height:1.6; }
+  .score-streak { display:flex; gap:8px; margin-top:10px; }
+  .ss-badge { background:var(--card2); border:1px solid var(--border); border-radius:8px; padding:5px 10px; display:flex; align-items:center; gap:5px; }
+  .ss-icon  { font-size:13px; }
+  .ss-text  { font-size:10px; font-weight:600; color:var(--gold); }
+
+  /* Stats grid */
+  .stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:0 20px 16px; }
+  .stat-box { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; }
+  .sb-label { font-size:9px; letter-spacing:0.16em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+  .sb-value { font-size:20px; font-weight:700; color:var(--white); letter-spacing:-0.02em; margin-bottom:3px; }
+  .sb-value.green { color:var(--green); }
+  .sb-value.red   { color:#E05555; }
+  .sb-value.gold  { color:var(--gold-light); }
+  .sb-sub   { font-size:10px; color:var(--muted); }
+
+  /* Section label */
+  .section-label { font-size:9px; letter-spacing:0.22em; text-transform:uppercase; color:var(--muted); padding:0 20px 10px; }
+
+  /* Category breakdown */
+  .cat-breakdown { margin:0 20px 16px; background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; }
+  .cb-row { display:grid; grid-template-columns:10px 1fr 60px 52px; align-items:center; gap:10px; margin-bottom:12px; }
+  .cb-row:last-child { margin-bottom:0; }
+  .cb-dot   { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .cb-info  { display:flex; flex-direction:column; gap:4px; }
+  .cb-name  { font-size:11px; font-weight:500; color:var(--white); }
+  .cb-track { height:4px; background:rgba(255,255,255,0.05); border-radius:2px; overflow:hidden; }
+  .cb-fill  { height:100%; border-radius:2px; }
+  .cb-spent { font-size:11px; font-weight:600; color:var(--white); text-align:right; }
+  .cb-status { font-size:9px; font-weight:600; text-align:right; }
+  .cb-status.ok   { color:var(--green); }
+  .cb-status.warn { color:var(--gold); }
+  .cb-status.over { color:#E05555; }
+
+  /* Day by day */
+  .day-grid { display:flex; gap:6px; margin:0 20px 16px; }
+  .day-col  { flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .day-bar-wrap { width:100%; height:80px; display:flex; align-items:flex-end; justify-content:center; }
+  .day-bar  { width:100%; border-radius:4px 4px 0 0; transition:height 0.6s ease; min-height:4px; }
+  .day-name { font-size:9px; color:var(--muted); letter-spacing:0.06em; text-transform:uppercase; }
+  .day-amt  { font-size:9px; font-weight:600; color:var(--white); }
+  .day-col.today .day-name { color:var(--gold); }
+  .day-col.today .day-amt  { color:var(--gold-light); }
+
+  /* Top expenses */
+  .expense-list { display:flex; flex-direction:column; gap:8px; margin:0 20px 16px; }
+  .exp-item { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px 14px; display:flex; align-items:center; gap:12px; }
+  .exp-rank { font-size:11px; font-weight:700; color:var(--gold-dim); width:16px; text-align:center; flex-shrink:0; }
+  .exp-icon { font-size:20px; flex-shrink:0; }
+  .exp-info { flex:1; }
+  .exp-name { font-size:12px; font-weight:500; color:var(--white); margin-bottom:2px; }
+  .exp-cat  { font-size:9px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; }
+  .exp-amt  { font-size:14px; font-weight:700; color:var(--white); }
+
+  /* Win/loss summary */
+  .win-loss { margin:0 20px 16px; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .wl-card  { border-radius:12px; padding:14px; }
+  .wl-card.win  { background:rgba(26,92,46,0.1); border:1px solid rgba(61,170,104,0.25); }
+  .wl-card.loss { background:rgba(139,26,26,0.08); border:1px solid rgba(139,26,26,0.2); }
+  .wl-title { font-size:10px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:10px; }
+  .wl-card.win  .wl-title { color:var(--green); }
+  .wl-card.loss .wl-title { color:#C05050; }
+  .wl-item  { font-size:11px; color:var(--muted); margin-bottom:6px; line-height:1.5; padding-left:14px; position:relative; }
+  .wl-item::before { content:''; position:absolute; left:0; top:7px; width:6px; height:6px; border-radius:50%; }
+  .wl-card.win  .wl-item::before { background:var(--green); }
+  .wl-card.loss .wl-item::before { background:#C05050; }
+
+
+
+
+  /* Progress chart */
+  .progress-chart { margin:0 20px 16px; background:var(--card); border:1px solid var(--border); border-radius:14px; padding:18px 16px; }
+  .pc-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  .pc-title  { font-size:12px; font-weight:600; color:var(--white); }
+  .pc-legend { display:flex; gap:12px; }
+  .pc-leg-item { display:flex; align-items:center; gap:5px; font-size:9px; color:var(--muted); }
+  .pc-leg-dot  { width:8px; height:8px; border-radius:50%; }
+  .chart-wrap  { position:relative; width:100%; height:160px; }
+  .chart-canvas { width:100%; height:100%; }
+  .pc-labels { display:flex; justify-content:space-between; margin-top:8px; }
+  .pc-label  { font-size:9px; color:var(--muted); letter-spacing:0.08em; text-transform:uppercase; text-align:center; flex:1; }
+  .pc-label.active { color:var(--gold); font-weight:600; }
+  /* Bottom nav */
+  .bottom-nav { position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:390px; background:rgba(8,8,8,0.97); border-top:1px solid var(--border); display:grid; grid-template-columns:repeat(5,1fr); padding:10px 0 22px; z-index:10; backdrop-filter:blur(12px); }
+  .nav-item { display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; opacity:0.38; transition:opacity 0.2s; }
+  .nav-item.active { opacity:1; }
+  .nav-icon  { font-size:20px; }
+  .nav-label { font-size:9px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); font-weight:500; }
+  .nav-item.active .nav-label { color:var(--gold); }
+  .nav-add { display:flex; flex-direction:column; align-items:center; cursor:pointer; margin-top:-22px; }
+  .nav-add-circle { width:54px; height:54px; border-radius:50%; background:linear-gradient(135deg,#B8923E,#E2C472,#B8923E); background-size:200%; display:flex; align-items:center; justify-content:center; font-size:28px; color:#080808; animation:addGlow 3s ease-in-out infinite; }
+  @keyframes addGlow { 0%,100%{box-shadow:0 0 12px rgba(201,168,76,0.3);background-position:0%} 50%{box-shadow:0 0 26px rgba(226,196,114,0.55);background-position:100%} }
+  @keyframes shimmer { 0%,100%{background-position:0%} 50%{background-position:100%} }
+  .fade-in { animation:fadeIn 0.5s ease both; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+</style>
+<script defer src="/theme.js"></script>
+<script defer src="/coach-mode.js"></script>
+<script defer src="/swipe-lock.js"></script>
+<script defer src="/nav-notify.js"></script>
+</head>
+<body>
+<canvas id="sparkle-canvas"></canvas>
+
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <div class="page-title">Weekly Summary</div>
+      <div class="page-sub" id="period-label">Jun 1 – Jun 7, 2025</div>
+    </div>
+  </div>
+
+  <!-- Period tabs -->
+  <div class="period-tabs">
+    <div class="period-tab active" onclick="setPeriod('week',this)">Weekly</div>
+    <div class="period-tab" onclick="setPeriod('month',this)">Monthly</div>
+    <div class="period-tab" onclick="setPeriod('quarter',this)">Quarterly</div>
+  </div>
+
+  <!-- Score card -->
+  <div class="score-card fade-in">
+    <div class="score-ring">
+      <svg viewBox="0 0 80 80">
+        <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="8"/>
+        <circle cx="40" cy="40" r="34" fill="none" stroke="#C9A84C" stroke-width="8"
+          stroke-linecap="round" stroke-dasharray="213.6" stroke-dashoffset="53" id="score-arc"/>
+      </svg>
+      <div class="score-center">
+        <div class="score-num" id="score-num">75</div>
+        <div class="score-label">Score</div>
+      </div>
+    </div>
+    <div class="score-info">
+      <div class="score-title" id="score-title">Great Progress!</div>
+      <div class="score-desc" id="score-desc">You stayed under budget in 3 of 4 categories and logged every day this week.</div>
+      <div class="score-streak">
+        <div class="ss-badge"><span class="ss-icon">🔥</span><span class="ss-text">7 Days Logged</span></div>
+        <div class="ss-badge"><span class="ss-icon">✅</span><span class="ss-text">5 On Track</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats grid -->
+  <div class="stats-grid fade-in" style="animation-delay:.05s">
+    <div class="stat-box">
+      <div class="sb-label">Total Spent</div>
+      <div class="sb-value" id="total-spent">$776</div>
+      <div class="sb-sub">of <span id="total-budget">$1,400</span> budget</div>
+    </div>
+    <div class="stat-box">
+      <div class="sb-label">Remaining</div>
+      <div class="sb-value green" id="remaining">$624</div>
+      <div class="sb-sub">left this week</div>
+    </div>
+    <div class="stat-box">
+      <div class="sb-label">Total Saved</div>
+      <div class="sb-value gold" id="total-saved">$64</div>
+      <div class="sb-sub">this period</div>
+    </div>
+    <div class="stat-box">
+      <div class="sb-label">Debt Paid</div>
+      <div class="sb-value red" id="debt-paid">$149</div>
+      <div class="sb-sub">toward payoff</div>
+    </div>
+  </div>
+
+  <!-- Category breakdown -->
+  <div class="section-label">Category Breakdown</div>
+  <div class="cat-breakdown fade-in" style="animation-delay:.08s">
+    <div class="cb-row">
+      <div class="cb-dot" style="background:#8B1A1A"></div>
+      <div class="cb-info">
+        <div class="cb-name">Debt Payoff</div>
+        <div class="cb-track"><div class="cb-fill" style="width:62%;background:#8B1A1A"></div></div>
+      </div>
+      <div class="cb-spent">$149</div>
+      <div class="cb-status ok">On Track</div>
+    </div>
+    <div class="cb-row">
+      <div class="cb-dot" style="background:#1A5C2E"></div>
+      <div class="cb-info">
+        <div class="cb-name">Savings</div>
+        <div class="cb-track"><div class="cb-fill" style="width:32%;background:#1A5C2E"></div></div>
+      </div>
+      <div class="cb-spent">$64</div>
+      <div class="cb-status warn">Build More</div>
+    </div>
+    <div class="cb-row">
+      <div class="cb-dot" style="background:#C8B48A"></div>
+      <div class="cb-info">
+        <div class="cb-name">Wants</div>
+        <div class="cb-track"><div class="cb-fill" style="width:48%;background:#C8B48A"></div></div>
+      </div>
+      <div class="cb-spent">$173</div>
+      <div class="cb-status ok">On Track</div>
+    </div>
+    <div class="cb-row">
+      <div class="cb-dot" style="background:#C97A2A"></div>
+      <div class="cb-info">
+        <div class="cb-name">Fixed</div>
+        <div class="cb-track"><div class="cb-fill" style="width:55%;background:#C97A2A"></div></div>
+      </div>
+      <div class="cb-spent">$390</div>
+      <div class="cb-status ok">On Track</div>
+    </div>
+  </div>
+
+  <!-- Day by day chart -->
+  <div class="section-label">Spending by Day</div>
+  <div class="day-grid fade-in" style="animation-delay:.1s" id="day-grid"></div>
+
+  <!-- Top expenses -->
+  <div class="section-label" style="margin-top:16px">Top Expenses</div>
+  <div class="expense-list fade-in" style="animation-delay:.12s">
+    <div class="exp-item">
+      <div class="exp-rank">#1</div>
+      <div class="exp-icon">🏠</div>
+      <div class="exp-info">
+        <div class="exp-name">Mortgage</div>
+        <div class="exp-cat" style="color:#C97A2A">Fixed</div>
+      </div>
+      <div class="exp-amt">$950</div>
+    </div>
+    <div class="exp-item">
+      <div class="exp-rank">#2</div>
+      <div class="exp-icon">🚗</div>
+      <div class="exp-info">
+        <div class="exp-name">Car Payment</div>
+        <div class="exp-cat" style="color:#C97A2A">Fixed</div>
+      </div>
+      <div class="exp-amt">$385</div>
+    </div>
+    <div class="exp-item">
+      <div class="exp-rank">#3</div>
+      <div class="exp-icon">💳</div>
+      <div class="exp-info">
+        <div class="exp-name">Credit Card Payment</div>
+        <div class="exp-cat" style="color:#8B1A1A">Debt</div>
+      </div>
+      <div class="exp-amt">$149</div>
+    </div>
+    <div class="exp-item">
+      <div class="exp-rank">#4</div>
+      <div class="exp-icon">💡</div>
+      <div class="exp-info">
+        <div class="exp-name">Electric Bill</div>
+        <div class="exp-cat" style="color:#C97A2A">Fixed</div>
+      </div>
+      <div class="exp-amt">$120</div>
+    </div>
+    <div class="exp-item">
+      <div class="exp-rank">#5</div>
+      <div class="exp-icon">🛒</div>
+      <div class="exp-info">
+        <div class="exp-name">Grocery Store</div>
+        <div class="exp-cat" style="color:#C97A2A">Fixed</div>
+      </div>
+      <div class="exp-amt">$87</div>
+    </div>
+  </div>
+
+  <!-- Progress chart -->
+  <div class="section-label" style="margin-top:16px">Your Progress Over Time</div>
+  <div class="progress-chart fade-in" style="animation-delay:.13s">
+    <div class="pc-header">
+      <div class="pc-title" id="chart-title">Spending vs Budget</div>
+      <div class="pc-legend">
+        <div class="pc-leg-item"><div class="pc-leg-dot" style="background:#C9A84C"></div>Spent</div>
+        <div class="pc-leg-item"><div class="pc-leg-dot" style="background:#1A5C2E"></div>Saved</div>
+        <div class="pc-leg-item"><div class="pc-leg-dot" style="background:#8B1A1A"></div>Debt Paid</div>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <canvas class="chart-canvas" id="progress-canvas"></canvas>
+    </div>
+    <div class="pc-labels" id="pc-labels"></div>
+  </div>
+
+  <!-- Wins & Areas to Improve -->
+  <div class="section-label" style="margin-top:16px">This Week</div>
+  <div class="win-loss fade-in" style="animation-delay:.14s">
+    <div class="wl-card win">
+      <div class="wl-title">🏆 Wins</div>
+      <div class="wl-item">Logged every single day</div>
+      <div class="wl-item">Under budget on Wants</div>
+      <div class="wl-item">Extra debt payment made</div>
+      <div class="wl-item">Emergency fund growing</div>
+    </div>
+    <div class="wl-card loss">
+      <div class="wl-title">📈 Focus On</div>
+      <div class="wl-item">Increase savings rate</div>
+      <div class="wl-item">Review Fixed expenses</div>
+      <div class="wl-item">Stay consistent next week</div>
+    </div>
+  </div>
+
+
+
+</div>
+
+<!-- Bottom nav -->
+<nav class="bottom-nav">
+  <div class="nav-item active">
+    <span class="nav-icon">🏠</span>
+    <span class="nav-label">Home</span>
+  </div>
+  <div class="nav-item">
+    <span class="nav-icon">📋</span>
+    <span class="nav-label">Log</span>
+  </div>
+  <div class="nav-add">
+    <div class="nav-add-circle">+</div>
+  </div>
+  <div class="nav-item">
+    <span class="nav-icon">💰</span>
+    <span class="nav-label">Savings</span>
+  </div>
+  <div class="nav-item">
+    <span class="nav-icon">💬</span>
+    <span class="nav-label">Coach</span>
+  </div>
+</nav>
+
+<script>
+// Auth guard
+fetch('/api/me').then(r => { if(!r.ok && !window._coachMode) window.location='/gg-login.html'; });
+
+// Load real summary data
+async function loadSummary() {
+  try {
+    const data = await fetch('/api/summary').then(r=>r.json());
+    // Update score card with real week data
+    const today = new Date();
+    const weekStart = new Date(today); weekStart.setDate(today.getDate() - today.getDay());
+    const label = weekStart.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + today.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    document.getElementById('period-label').textContent = label;
+    if(data.week) {
+      document.getElementById('total-spent').textContent  = '$'+(data.week.spent||0).toLocaleString();
+      document.getElementById('total-budget').textContent = '$'+(data.week.budget||0).toLocaleString();
+      document.getElementById('remaining').textContent    = '$'+Math.max(0,(data.week.budget||0)-(data.week.spent||0)).toLocaleString();
+      document.getElementById('total-saved').textContent  = '$'+(data.week.saved||0).toLocaleString();
+      document.getElementById('debt-paid').textContent    = '$'+(data.week.debtPaid||0).toLocaleString();
+      const score = data.week.score || 75;
+      document.getElementById('score-num').textContent = score;
+      const circumference = 213.6;
+      document.getElementById('score-arc').style.strokeDashoffset = circumference - (score/100)*circumference;
+    }
+    // Day-by-day bars from real expense data
+    if(data.dailyThisWeek) {
+      data.dailyThisWeek.forEach((amt, i) => { if(i < days.length) days[i].amt = amt; });
+      renderDays();
+    }
+  } catch(e) { /* keep defaults */ }
+}
+
+// Period switcher (kept with sensible defaults)
+const periods = {
+  week:    { label:'This Week',    spent:0, budget:0, remaining:0, saved:0, debt:0, score:0, title:'Loading…', desc:'' },
+  month:   { label:'This Month',   spent:0, budget:0, remaining:0, saved:0, debt:0, score:0, title:'Loading…', desc:'' },
+  quarter: { label:'This Quarter', spent:0, budget:0, remaining:0, saved:0, debt:0, score:0, title:'Loading…', desc:'' },
+};
+
+function setPeriod(key, tab) {
+  document.querySelectorAll('.period-tab').forEach(t=>t.classList.remove('active'));
+  tab.classList.add('active');
+  const d = periods[key];
+  document.getElementById('period-label').textContent  = d.label;
+  document.getElementById('total-spent').textContent   = '$'+d.spent.toLocaleString();
+  document.getElementById('total-budget').textContent  = '$'+d.budget.toLocaleString();
+  document.getElementById('remaining').textContent     = '$'+d.remaining.toLocaleString();
+  document.getElementById('total-saved').textContent   = '$'+d.saved.toLocaleString();
+  document.getElementById('debt-paid').textContent     = '$'+d.debt.toLocaleString();
+  document.getElementById('score-num').textContent     = d.score;
+  document.getElementById('score-title').textContent   = d.title;
+  document.getElementById('score-desc').textContent    = d.desc;
+  // Update score arc
+  const circumference = 213.6;
+  const offset = circumference - (d.score/100)*circumference;
+  document.getElementById('score-arc').style.strokeDashoffset = offset;
+}
+
+// Day by day bar chart
+const days = [
+  {name:'Mon', amt:210, today:false},
+  {name:'Tue', amt:85,  today:false},
+  {name:'Wed', amt:320, today:false},
+  {name:'Thu', amt:95,  today:true },
+  {name:'Fri', amt:0,   today:false},
+  {name:'Sat', amt:0,   today:false},
+  {name:'Sun', amt:0,   today:false},
+];
+const maxAmt = Math.max(...days.map(d=>d.amt), 1);
+
+function renderDays() {
+  const grid = document.getElementById('day-grid');
+  grid.innerHTML = '';
+  days.forEach(d => {
+    const pct = d.amt > 0 ? Math.max(8, (d.amt/maxAmt)*80) : 4;
+    const col = document.createElement('div');
+    col.className = 'day-col'+(d.today?' today':'');
+    col.innerHTML = `
+      <div class="day-bar-wrap">
+        <div class="day-bar" style="height:${pct}px;background:${d.today?'#C9A84C':d.amt>0?'rgba(201,168,76,0.35)':'rgba(255,255,255,0.05)'}"></div>
+      </div>
+      <div class="day-name">${d.name}</div>
+      <div class="day-amt">${d.amt>0?'$'+d.amt:'-'}</div>`;
+    grid.appendChild(col);
+  });
+}
+renderDays();
+loadSummary();
+
+// Progress chart data
+const chartData = {
+  week: {
+    title: 'This Week — Day by Day',
+    labels: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+    spent:  [210, 85, 320, 95, 0, 0, 0],
+    saved:  [20,  10, 20,  14, 0, 0, 0],
+    debt:   [0,   0,  149, 0,  0, 0, 0],
+  },
+  month: {
+    title: 'This Month — Week by Week',
+    labels: ['Wk 1','Wk 2','Wk 3','Wk 4'],
+    spent:  [720, 890, 640, 640],
+    saved:  [60,  80,  56,  60],
+    debt:   [149, 149, 149, 149],
+  },
+  quarter: {
+    title: 'This Quarter — Month by Month',
+    labels: ['April','May','June'],
+    spent:  [2950, 2800, 2490],
+    saved:  [200,  300,  320],
+    debt:   [596,  596,  596],
+  },
+};
+
+let currentChartPeriod = 'week';
+
+function drawChart(period) {
+  currentChartPeriod = period;
+  const data   = chartData[period];
+  const canvas = document.getElementById('progress-canvas');
+  const ctx2   = canvas.getContext('2d');
+  const dpr    = window.devicePixelRatio||1;
+  const rect   = canvas.getBoundingClientRect();
+  canvas.width  = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx2.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+  const pad = { top:10, right:10, bottom:20, left:36 };
+  const chartW = W - pad.left - pad.right;
+  const chartH = H - pad.top - pad.bottom;
+  const n = data.labels.length;
+
+  // Max value
+  const allVals = [...data.spent, ...data.saved, ...data.debt];
+  const maxVal  = Math.max(...allVals, 1);
+
+  function xPos(i) { return pad.left + (i/(n-1||1))*chartW; }
+  function yPos(v) { return pad.top + chartH - (v/maxVal)*chartH; }
+
+  ctx2.clearRect(0,0,W,H);
+
+  // Grid lines
+  for(let i=0;i<=4;i++) {
+    const y = pad.top + (i/4)*chartH;
+    ctx2.beginPath();
+    ctx2.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx2.lineWidth = 1;
+    ctx2.moveTo(pad.left, y);
+    ctx2.lineTo(W-pad.right, y);
+    ctx2.stroke();
+    // Y label
+    const val = Math.round(maxVal*(1-i/4));
+    ctx2.fillStyle = 'rgba(90,85,80,0.8)';
+    ctx2.font = '9px Inter, sans-serif';
+    ctx2.textAlign = 'right';
+    ctx2.fillText('$'+val.toLocaleString(), pad.left-4, y+3);
+  }
+
+  // Draw line function
+  function drawLine(values, color, dotColor, dash=[]) {
+    if(n===1) return;
+    ctx2.save();
+    ctx2.strokeStyle = color;
+    ctx2.lineWidth   = 2;
+    ctx2.lineJoin    = 'round';
+    ctx2.lineCap     = 'round';
+    if(dash.length) ctx2.setLineDash(dash);
+
+    // Area fill
+    ctx2.beginPath();
+    ctx2.moveTo(xPos(0), yPos(values[0]));
+    for(let i=1;i<n;i++) {
+      const xc = (xPos(i-1)+xPos(i))/2;
+      ctx2.bezierCurveTo(xc, yPos(values[i-1]), xc, yPos(values[i]), xPos(i), yPos(values[i]));
+    }
+    ctx2.lineTo(xPos(n-1), pad.top+chartH);
+    ctx2.lineTo(xPos(0), pad.top+chartH);
+    ctx2.closePath();
+    const grad = ctx2.createLinearGradient(0,pad.top,0,pad.top+chartH);
+    grad.addColorStop(0, color.replace(')',',0.18)').replace('rgb','rgba'));
+    grad.addColorStop(1, 'transparent');
+    ctx2.fillStyle = grad;
+    ctx2.fill();
+
+    // Line
+    ctx2.beginPath();
+    ctx2.moveTo(xPos(0), yPos(values[0]));
+    for(let i=1;i<n;i++) {
+      const xc = (xPos(i-1)+xPos(i))/2;
+      ctx2.bezierCurveTo(xc, yPos(values[i-1]), xc, yPos(values[i]), xPos(i), yPos(values[i]));
+    }
+    ctx2.stroke();
+
+    // Dots
+    ctx2.setLineDash([]);
+    values.forEach((v,i) => {
+      if(v===0) return;
+      ctx2.beginPath();
+      ctx2.arc(xPos(i), yPos(v), 4, 0, Math.PI*2);
+      ctx2.fillStyle = dotColor;
+      ctx2.fill();
+      ctx2.strokeStyle = '#080808';
+      ctx2.lineWidth = 1.5;
+      ctx2.stroke();
+    });
+    ctx2.restore();
+  }
+
+  drawLine(data.spent, '#C9A84C', '#E2C472');
+  drawLine(data.saved, '#1A5C2E', '#3DAA68');
+  drawLine(data.debt,  '#8B1A1A', '#C05050');
+
+  // Update labels
+  const lblContainer = document.getElementById('pc-labels');
+  lblContainer.innerHTML = '';
+  data.labels.forEach(l => {
+    const sp = document.createElement('div');
+    sp.className = 'pc-label';
+    sp.textContent = l;
+    lblContainer.appendChild(sp);
+  });
+
+  document.getElementById('chart-title').textContent = data.title;
+}
+
+// Hook into period switcher
+const origSetPeriod = setPeriod;
+setPeriod = function(key, tab) {
+  origSetPeriod(key, tab);
+  drawChart(key);
+};
+
+// Initial draw after layout
+setTimeout(() => drawChart('week'), 100);
+window.addEventListener('resize', () => drawChart(currentChartPeriod));
+
+// Sparkle
+const canvas=document.getElementById('sparkle-canvas'),ctx=canvas.getContext('2d');
+function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
+resize();window.addEventListener('resize',resize);
+const SC=['rgba(226,196,114,','rgba(201,168,76,','rgba(240,237,232,'];
+class Sparkle{constructor(){this.reset();}reset(){this.x=Math.random()*canvas.width;this.y=Math.random()*canvas.height;this.size=Math.random()*1.3+0.3;this.ba=Math.random()*0.4+0.07;this.a=this.ba;this.ph=Math.random()*Math.PI*2;this.sp=Math.random()*0.015+0.006;this.c=SC[Math.floor(Math.random()*SC.length)];this.arms=Math.random()>0.65;}update(){this.ph+=this.sp;this.a=this.ba*(0.4+0.6*Math.abs(Math.sin(this.ph)));}draw(){ctx.save();ctx.globalAlpha=this.a;if(this.arms){ctx.strokeStyle=this.c+this.a+')';ctx.lineWidth=this.size*0.5;ctx.lineCap='round';const s=this.size*3;ctx.beginPath();ctx.moveTo(this.x-s,this.y);ctx.lineTo(this.x+s,this.y);ctx.moveTo(this.x,this.y-s);ctx.lineTo(this.x,this.y+s);ctx.stroke();}else{ctx.fillStyle=this.c+'1)';ctx.beginPath();ctx.arc(this.x,this.y,this.size,0,Math.PI*2);ctx.fill();}ctx.restore();}}
+const SP=Array.from({length:60},()=>new Sparkle());
+function animate(){ctx.clearRect(0,0,canvas.width,canvas.height);SP.forEach(s=>{s.update();s.draw();});requestAnimationFrame(animate);}
+animate();
+</script>
+
+<!-- ── User Menu ── -->
+<div id="umBtn" onclick="toggleUM()" style="position:fixed;top:14px;right:18px;z-index:100;width:34px;height:34px;border-radius:50%;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.25);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;font-weight:600;color:#C9A84C;font-family:Inter,sans-serif;letter-spacing:0;user-select:none"></div>
+<div id="umOverlay" onclick="if(event.target===this)toggleUM()" style="display:none;position:fixed;inset:0;background:rgba(8,8,8,0.78);z-index:200;align-items:center;justify-content:center;padding:0 20px">
+  <div style="background:#141414;border:1px solid rgba(201,168,76,0.22);border-radius:16px;padding:22px 20px;width:100%;max-width:350px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
+      <div id="umAvatar" style="width:42px;height:42px;border-radius:50%;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#C9A84C;font-family:Inter,sans-serif;flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div id="umName" style="font-size:15px;font-weight:600;color:#F0EDE8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+        <div id="umRole" style="font-size:10px;color:#5A5550;letter-spacing:0.1em;text-transform:uppercase;margin-top:2px"></div>
+      </div>
+      <div onclick="toggleUM()" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:#5A5550;flex-shrink:0">✕</div>
+    </div>
+    <div style="height:1px;background:rgba(201,168,76,0.1);margin-bottom:16px"></div>
+    <button id="umThemeBtn" onclick="toggleTheme()" style="width:100%;padding:13px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.15);border-radius:10px;color:#C9A84C;font-family:Inter,sans-serif;font-size:13px;font-weight:500;cursor:pointer;letter-spacing:0.04em;margin-bottom:8px">☀️  Light Mode</button>
+    <button onclick="doLogout()" style="width:100%;padding:13px;background:rgba(139,26,26,0.12);border:1px solid rgba(255,107,107,0.2);border-radius:10px;color:#FF6B6B;font-family:Inter,sans-serif;font-size:13px;font-weight:500;cursor:pointer;letter-spacing:0.04em">↩ &nbsp;Sign Out</button>
+  </div>
+</div>
+<script>
+function toggleUM(){var o=document.getElementById("umOverlay");o.style.display=o.style.display==="flex"?"none":"flex";}
+async function doLogout(){await fetch("/api/logout",{method:"POST"});window.location="/gg-login.html";}
+fetch("/api/me").then(r=>r.json()).then(u=>{
+  var initials=(u.name||u.username||"?").split(" ").map(function(w){return w[0];}).join("").toUpperCase().slice(0,2);
+  var btn=document.getElementById("umBtn");if(btn)btn.textContent=initials;
+  var av=document.getElementById("umAvatar");if(av)av.textContent=initials;
+  var nm=document.getElementById("umName");if(nm)nm.textContent=u.name||u.username;
+  var rl=document.getElementById("umRole");if(rl)rl.textContent=u.role==="coach"?"Financial Coach · G&G":"Budgeting Client";
+}).catch(function(){});
+</script>
+<script>
+// Nav wiring
+(function(){
+  var qs = window._coachMode ? "?clientId="+encodeURIComponent(window._coachClientId)+"&clientName="+encodeURIComponent(window._coachClientName) : "";
+  var pages = ["/gg-home.html", "/gg-daily-log.html", "/gg-savings.html", "/gg-advisor.html"];
+  document.querySelectorAll(".nav-item").forEach(function(el,i){
+    if(pages[i]) el.addEventListener("click", function(){ window.location = pages[i]+qs; });
+  });
+})();
+</script>
+</body>
+</html>
