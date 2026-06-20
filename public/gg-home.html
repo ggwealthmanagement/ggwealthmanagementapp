@@ -298,8 +298,8 @@
   <!-- Income -->
   <div class="income-bar fade-in" style="animation-delay:.05s">
     <div>
-      <div class="income-label">Weekly Income</div>
-      <div class="income-amount" id="income-display">$1,200 <span>/ this week</span></div>
+      <div class="income-label" id="income-label">Income</div>
+      <div class="income-amount" id="income-display">$— <span>/ weekly</span></div>
     </div>
     <button class="income-edit-btn" onclick="openModal()">+ Update</button>
   </div>
@@ -464,8 +464,18 @@
 <div class="modal-overlay" id="modal" onclick="closeModalOutside(event)">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">Update Weekly Income</div>
-    <div class="modal-sub">Enter your paycheck amount for this week</div>
+    <div class="modal-title">Update Income</div>
+    <div class="modal-sub">How often do you get paid?</div>
+
+    <!-- Frequency tabs -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:18px">
+      <button class="freq-btn active" data-freq="weekly"    onclick="setFreq('weekly')">Weekly</button>
+      <button class="freq-btn"        data-freq="biweekly"  onclick="setFreq('biweekly')">Bi-Weekly</button>
+      <button class="freq-btn"        data-freq="monthly"   onclick="setFreq('monthly')">Monthly</button>
+    </div>
+
+    <div id="freq-hint" style="font-size:11px;color:var(--muted);margin-bottom:14px;min-height:16px;text-align:center"></div>
+
     <div class="modal-input-wrap">
       <span class="currency">$</span>
       <input class="modal-input" type="number" placeholder="0.00" id="income-input">
@@ -473,6 +483,19 @@
     <button class="modal-btn" onclick="saveIncome()">Save Income</button>
   </div>
 </div>
+
+<style>
+.freq-btn {
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(201,168,76,0.15);
+  border-radius: 8px; color: var(--muted); cursor: pointer;
+  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
+  letter-spacing: 0.08em; padding: 10px 4px; transition: all 0.18s;
+}
+.freq-btn.active {
+  background: rgba(201,168,76,0.15); border-color: rgba(201,168,76,0.5);
+  color: var(--gold);
+}
+</style>
 
 <!-- Bottom nav -->
 <nav class="bottom-nav">
@@ -517,11 +540,19 @@ async function init() {
   document.querySelector('.streak-badge:nth-child(1) .s-num').textContent = streaksData.logged_streak  || 0;
   document.querySelector('.streak-badge:nth-child(2) .s-num').textContent = streaksData.on_track_streak || 0;
 
-  // Income display
-  const income = budget.weekly_income || 0;
+  // Income display — show raw amount + frequency label
+  const income    = budget.weekly_income || 0;
+  const rawAmt    = budget.income_amount    || income;
+  const freq      = budget.income_frequency || 'weekly';
+  const freqLabel = freq === 'biweekly' ? 'Bi-Weekly' : freq === 'monthly' ? 'Monthly' : 'Weekly';
+  const freqSub   = freq === 'biweekly' ? 'bi-weekly' : freq === 'monthly' ? 'monthly' : 'weekly';
+  var lbl = document.getElementById('income-label');
+  if (lbl) lbl.textContent = freqLabel + ' Income';
   document.getElementById('income-display').innerHTML =
-    '$' + income.toLocaleString('en-US',{minimumFractionDigits:0}) + ' <span>/ this week</span>';
-  document.getElementById('income-input').value = income > 0 ? income : '';
+    '$' + rawAmt.toLocaleString('en-US',{minimumFractionDigits:0}) + ' <span>/ ' + freqSub + '</span>';
+  document.getElementById('income-input').value = rawAmt > 0 ? rawAmt : '';
+  // Sync modal freq tab
+  setFreq(freq, false);
 
   // Week start
   const now = new Date();
@@ -625,6 +656,22 @@ async function init() {
 
 init();
 
+var _currentFreq = 'weekly';
+var _freqHints = {
+  weekly:   'Enter your paycheck amount each week',
+  biweekly: 'Enter each paycheck amount — we\'ll split it weekly',
+  monthly:  'Enter your monthly take-home — we\'ll split it weekly'
+};
+
+function setFreq(freq, updateInput) {
+  _currentFreq = freq;
+  document.querySelectorAll('.freq-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.freq === freq);
+  });
+  var hint = document.getElementById('freq-hint');
+  if (hint) hint.textContent = _freqHints[freq] || '';
+}
+
 function openModal() { document.getElementById('modal').classList.add('open'); }
 function closeModalOutside(e) {
   if (e.target === document.getElementById('modal'))
@@ -634,11 +681,19 @@ async function saveIncome() {
   const val = parseFloat(document.getElementById('income-input').value);
   if (val && val > 0) {
     const budget = await fetch('/api/budget').then(r=>r.json());
-    await fetch('/api/budget', { method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ ...budget, weekly_income: val }) });
+    await fetch('/api/budget', {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        ...budget,
+        income_amount:    val,
+        income_frequency: _currentFreq
+      })
+    });
+    const freqLabel = _currentFreq === 'biweekly' ? 'bi-weekly' : _currentFreq === 'monthly' ? 'monthly' : 'weekly';
     document.getElementById('income-display').innerHTML =
-      '$' + val.toLocaleString('en-US',{minimumFractionDigits:0}) + ' <span>/ this week</span>';
-    init(); // re-render rings
+      '$' + val.toLocaleString('en-US',{minimumFractionDigits:0}) + ' <span>/ ' + freqLabel + '</span>';
+    init();
   }
   document.getElementById('modal').classList.remove('open');
 }

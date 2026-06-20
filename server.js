@@ -163,6 +163,10 @@ function seedIfEmpty() {
   console.log('   Client login: username=maria    password=client123');
 }
 
+// ─── Migrations (safe to run multiple times) ──────────────────────────────────
+try { db.exec("ALTER TABLE budget ADD COLUMN income_amount REAL DEFAULT 0"); } catch(e) {}
+try { db.exec("ALTER TABLE budget ADD COLUMN income_frequency TEXT DEFAULT 'weekly'"); } catch(e) {}
+
 seedIfEmpty();
 
 // ─── Express app ──────────────────────────────────────────────────────────────
@@ -289,18 +293,36 @@ app.get('/api/budget', requireAuth, (req, res) => {
 
 app.put('/api/budget', requireAuth, (req, res) => {
   const clientId = getClientId(req);
-  const { weekly_income, fixed_pct, wants_pct, savings_pct, debt_pct } = req.body;
+  const { weekly_income, income_amount, income_frequency, fixed_pct, wants_pct, savings_pct, debt_pct } = req.body;
+
+  // Convert entered amount to weekly equivalent
+  let weeklyIncome = parseFloat(weekly_income) || 0;
+  let rawAmount    = parseFloat(income_amount)  || weeklyIncome;
+  let freq         = income_frequency || 'weekly';
+
+  if (income_amount != null) {
+    const amt = parseFloat(income_amount) || 0;
+    rawAmount = amt;
+    if (freq === 'biweekly')  weeklyIncome = amt / 2;
+    else if (freq === 'monthly') weeklyIncome = (amt * 12) / 52;
+    else weeklyIncome = amt; // weekly
+  }
+
   db.prepare(`
-    INSERT INTO budget (client_id, weekly_income, fixed_pct, wants_pct, savings_pct, debt_pct)
-    VALUES (?,?,?,?,?,?)
+    INSERT INTO budget (client_id, weekly_income, income_amount, income_frequency, fixed_pct, wants_pct, savings_pct, debt_pct)
+    VALUES (?,?,?,?,?,?,?,?)
     ON CONFLICT(client_id) DO UPDATE SET
-      weekly_income = excluded.weekly_income,
-      fixed_pct     = excluded.fixed_pct,
-      wants_pct     = excluded.wants_pct,
-      savings_pct   = excluded.savings_pct,
-      debt_pct      = excluded.debt_pct
+      weekly_income    = excluded.weekly_income,
+      income_amount    = excluded.income_amount,
+      income_frequency = excluded.income_frequency,
+      fixed_pct        = excluded.fixed_pct,
+      wants_pct        = excluded.wants_pct,
+      savings_pct      = excluded.savings_pct,
+      debt_pct         = excluded.debt_pct
   `).run(clientId,
-    weekly_income ?? 0,
+    weeklyIncome,
+    rawAmount,
+    freq,
     fixed_pct   ?? 50,
     wants_pct   ?? 25,
     savings_pct ?? 10,
