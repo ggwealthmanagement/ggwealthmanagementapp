@@ -14,6 +14,12 @@ db.exec('PRAGMA foreign_keys=ON');
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 db.exec(`
+  CREATE TABLE IF NOT EXISTS sessions (
+    sid     TEXT PRIMARY KEY,
+    data    TEXT NOT NULL,
+    expires INTEGER NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     username      TEXT    UNIQUE NOT NULL,
@@ -164,9 +170,51 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Sessions stored in SQLite so they survive restarts
+// ─── SQLite-backed session store (survives server restarts / Render sleep) ────
+const SessionStore = session.Store;
+class SQLiteSessionStore extends SessionStore {
+  get(sid, cb) {
+    try {
+      const row = db.prepare('SELECT data, expires FROM sessions WHERE sid = ?').get(sid);
+      if (!row) return cb(null, null);
+      if (Date.now() > row.expires) {
+        db.prepare('DELETE FROM sessions WHERE sid = ?').run(sid);
+        return cb(null, null);
+      }
+      return cb(null, JSON.parse(row.data));
+    } catch(e) { cb(e); }
+  }
+  set(sid, sess, cb) {
+    try {
+      const expires = sess.cookie && sess.cookie.expires
+        ? new Date(sess.cookie.expires).getTime()
+        : Date.now() + 7 * 24 * 60 * 60 * 1000;
+      db.prepare(`INSERT INTO sessions (sid, data, expires) VALUES (?,?,?)
+        ON CONFLICT(sid) DO UPDATE SET data=excluded.data, expires=excluded.expires`)
+        .run(sid, JSON.stringify(sess), expires);
+      cb(null);
+    } catch(e) { cb(e); }
+  }
+  destroy(sid, cb) {
+    try { db.prepare('DELETE FROM sessions WHERE sid = ?').run(sid); cb(null); }
+    catch(e) { cb(e); }
+  }
+  touch(sid, sess, cb) {
+    try {
+      const expires = sess.cookie && sess.cookie.expires
+        ? new Date(sess.cookie.expires).getTime()
+        : Date.now() + 7 * 24 * 60 * 60 * 1000;
+      db.prepare('UPDATE sessions SET expires=? WHERE sid=?').run(expires, sid);
+      cb(null);
+    } catch(e) { cb(e); }
+  }
+}
+// Clean up expired sessions on startup
+try { db.prepare('DELETE FROM sessions WHERE expires < ?').run(Date.now()); } catch(e) {}
+
+// Sessions stored in SQLite so they survive restarts / Render sleep cycles
 app.use(session({
-  // In-memory session store (sessions reset on server restart — fine for local dev)
+  store: new SQLiteSessionStore(),
   secret: 'gg-wealth-secret-2024',
   resave: false,
   saveUninitialized: false,

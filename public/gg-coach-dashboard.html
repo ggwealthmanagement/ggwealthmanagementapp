@@ -741,38 +741,57 @@ function cancelDelete() {
   deleteTargetId = null;
 }
 
-// Load real clients from API, fall back to local demo data for display
+// Load real clients from API
 function loadClients() {
   fetch('/api/coach/clients').then(function(r){ return r.json(); }).then(function(data) {
-    if(data && data.length > 0) {
+    if (data && data.length > 0) {
+      var icons = { fixed:'🏠', wants:'🛍️', savings:'💰', debt:'💳' };
       clients = data.map(function(c) {
-        var initials = (c.name||'?').split(' ').map(function(w){ return w[0]; }).join('').toUpperCase().slice(0,2);
+        var initials = (c.name||'?').split(' ').map(function(w){ return w[0]||''; }).join('').toUpperCase().slice(0,2);
         var color = colorPool[c.id % colorPool.length];
-        var spent = (c.fixed_spent||0)+(c.wants_spent||0)+(c.savings_spent||0)+(c.debt_spent||0);
-        var budget = c.weekly_income || 1400;
-        var pct = budget > 0 ? spent/budget : 0;
-        var status = pct > 1 ? 'over' : pct > 0.85 ? 'risk' : 'good';
+        // Server sends: c.status, c.budget (weekly_income), c.spent (total), c.saved, c.streak, c.unread
+        // c.cats → [{n,s,b,c}], c.activity → expense rows, c.notes → message rows
+        var debtCat = c.cats && c.cats[3] ? c.cats[3].s : 0;
         return {
-          id: c.id, name: c.name||'Unknown', initials: initials, color: color, status: status,
-          budget: budget, spent: spent, saved: c.savings_spent||0, debt: c.debt_spent||0,
-          streak: c.streak||0, last: c.last_active||'Unknown', unread: !!c.unread,
-          cats:[
-            {n:'Fixed',   s:c.fixed_spent||0,   b:Math.round(budget*0.50), c:'#C97A2A'},
-            {n:'Wants',   s:c.wants_spent||0,   b:Math.round(budget*0.25), c:'#C8B48A'},
-            {n:'Savings', s:c.savings_spent||0, b:Math.round(budget*0.15), c:'#1A5C2E'},
-            {n:'Debt',    s:c.debt_spent||0,    b:Math.round(budget*0.10), c:'#8B1A1A'},
+          id:       c.id,
+          name:     c.name || 'Unknown',
+          initials: initials,
+          color:    color,
+          status:   c.status || 'good',
+          budget:   c.budget || 0,
+          spent:    c.spent  || 0,
+          saved:    c.saved  || 0,
+          debt:     debtCat,
+          streak:   c.streak || 0,
+          last:     'Recent',
+          unread:   !!c.unread,
+          cats: c.cats || [
+            {n:'Fixed',   s:0, b:0, c:'#C97A2A'},
+            {n:'Wants',   s:0, b:0, c:'#C8B48A'},
+            {n:'Savings', s:0, b:0, c:'#1A5C2E'},
+            {n:'Debt',    s:0, b:0, c:'#8B1A1A'},
           ],
-          activity: (c.recent_expenses||[]).map(function(e){
-            var icons = {Fixed:'🏠',Wants:'🛍️',Savings:'💰',Debt:'💳'};
-            return {icon:icons[e.category]||'💸',name:e.description,cat:e.category,amt:e.amount,time:e.created_at||'Recent'};
+          activity: (c.activity || []).map(function(e) {
+            return {
+              icon: icons[e.category] || '💸',
+              name: e.description,
+              cat:  e.category,
+              amt:  e.amount,
+              time: e.created_at || 'Recent'
+            };
           }),
-          notes: (c.notes||[]).map(function(m){
-            return {from: m.sender_role==='coach'?'coach':'client', time:m.created_at||'', text:m.text||''};
+          notes: (c.notes || []).map(function(m) {
+            return {
+              from: m.sender_role === 'coach' ? 'coach' : 'client',
+              time: m.created_at || '',
+              text: m.text || ''
+            };
           })
         };
       });
     }
     renderList();
+    updateNotifBar();
   }).catch(function(){ renderList(); });
 }
 
