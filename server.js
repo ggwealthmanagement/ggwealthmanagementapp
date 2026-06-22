@@ -7,7 +7,8 @@ const path     = require('path');
 const fs       = require('fs');
 
 // ─── Database setup ───────────────────────────────────────────────────────────
-const DB_PATH = path.join(__dirname, 'gg-data.db');
+// DB_PATH env var lets Railway (or any host) point to a persistent volume
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'gg-data.db');
 const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA journal_mode=WAL');
 db.exec('PRAGMA foreign_keys=ON');
