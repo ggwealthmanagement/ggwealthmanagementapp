@@ -186,6 +186,60 @@
 
   .debt-card { cursor:pointer; }
 
+  /* ── Log Payment bottom sheet ── */
+  .pay-sheet {
+    position:fixed; inset:0; background:rgba(0,0,0,0.82); z-index:25;
+    display:flex; align-items:flex-end; justify-content:center;
+    opacity:0; pointer-events:none; transition:opacity 0.25s;
+  }
+  .pay-sheet.open { opacity:1; pointer-events:all; }
+  .pay-sheet-inner {
+    width:100%; max-width:390px; background:#141414;
+    border:1px solid rgba(201,168,76,0.22); border-radius:20px 20px 0 0;
+    padding:16px 22px 44px;
+    transform:translateY(48px); transition:transform 0.3s cubic-bezier(.4,0,.2,1);
+  }
+  .pay-sheet.open .pay-sheet-inner { transform:translateY(0); }
+  .sheet-handle { width:36px; height:4px; background:rgba(255,255,255,0.12); border-radius:2px; margin:0 auto 18px; }
+
+  .ps-header { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+  .ps-icon { width:42px; height:42px; border-radius:12px; background:rgba(139,26,26,0.15); display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; }
+  .ps-debt-name { font-size:15px; font-weight:600; color:var(--white); }
+  .ps-debt-type { font-size:10px; color:var(--muted); margin-top:2px; }
+  .ps-remaining { font-size:30px; font-weight:700; color:#C05050; letter-spacing:-0.03em; line-height:1; }
+  .ps-rem-label { font-size:10px; color:var(--muted); margin-bottom:8px; }
+  .ps-track { height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden; margin-bottom:16px; }
+  .ps-fill  { height:100%; border-radius:3px; transition:width 0.6s ease; }
+
+  .ps-type-row { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-bottom:14px; }
+  .ps-type-btn {
+    padding:10px 4px; background:var(--card2); border:1px solid var(--border);
+    border-radius:9px; color:var(--muted); font-family:'Inter',sans-serif;
+    font-size:9px; font-weight:600; letter-spacing:0.04em; cursor:pointer;
+    text-align:center; line-height:1.4; transition:all 0.15s;
+  }
+  .ps-type-btn.active { background:rgba(139,26,26,0.2); border-color:rgba(139,26,26,0.6); color:var(--white); }
+
+  .ps-hint { font-size:10px; color:var(--muted); margin-top:-6px; margin-bottom:12px; min-height:14px; }
+  .ps-hint.error { color:#E05555; }
+
+  .ps-divider { height:1px; background:rgba(255,255,255,0.06); margin:16px 0 14px; }
+  .ps-action-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .ps-edit-btn {
+    background:transparent; border:1px solid rgba(201,168,76,0.25); border-radius:10px;
+    color:var(--gold); cursor:pointer; font-family:'Inter',sans-serif;
+    font-size:11px; font-weight:600; letter-spacing:0.08em; padding:13px;
+    transition:background 0.15s, border-color 0.15s;
+  }
+  .ps-edit-btn:hover { background:rgba(201,168,76,0.08); border-color:var(--gold); }
+  .ps-del-btn {
+    background:transparent; border:1px solid rgba(139,26,26,0.3); border-radius:10px;
+    color:#C05050; cursor:pointer; font-family:'Inter',sans-serif;
+    font-size:11px; font-weight:600; letter-spacing:0.08em; padding:13px;
+    transition:background 0.15s;
+  }
+  .ps-del-btn:hover { background:rgba(139,26,26,0.1); border-color:#8B1A1A; }
+
   .add-debt-fab { position:fixed; bottom:100px; right:calc(50% - 175px); background:var(--card); border:1px solid var(--border); border-radius:50%; width:46px; height:46px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:22px; color:var(--gold); box-shadow:0 4px 20px rgba(0,0,0,0.4); transition:transform 0.15s; z-index:5; }
   .add-debt-fab:hover { transform:scale(1.08); }
 
@@ -301,6 +355,49 @@
     <button class="save-btn" onclick="saveEdit()">Save Changes</button>
     <button class="delete-btn" onclick="deleteDebt()">🗑 &nbsp; Delete This Debt</button>
     <button class="close-btn" onclick="closeEditModal()">✕ &nbsp; Close</button>
+  </div>
+</div>
+
+<!-- Log Payment Bottom Sheet -->
+<div class="pay-sheet" id="pay-sheet" onclick="closePSOut(event)">
+  <div class="pay-sheet-inner">
+    <div class="sheet-handle"></div>
+
+    <!-- Debt info -->
+    <div class="ps-header">
+      <div class="ps-icon" id="ps-icon">💳</div>
+      <div>
+        <div class="ps-debt-name" id="ps-name">Debt</div>
+        <div class="ps-debt-type" id="ps-type-label">Type</div>
+      </div>
+    </div>
+    <div class="ps-remaining" id="ps-remaining">$0</div>
+    <div class="ps-rem-label">remaining balance</div>
+    <div class="ps-track"><div class="ps-fill" id="ps-fill" style="width:0%"></div></div>
+
+    <!-- Payment type -->
+    <span class="input-label">Payment Type</span>
+    <div class="ps-type-row">
+      <button class="ps-type-btn active" onclick="setPSType('min',this)">Min<br>Payment</button>
+      <button class="ps-type-btn" onclick="setPSType('extra',this)">Extra<br>Payment</button>
+      <button class="ps-type-btn" onclick="setPSType('full',this)">Full<br>Payoff</button>
+      <button class="ps-type-btn" onclick="setPSType('custom',this)">Custom<br>Amount</button>
+    </div>
+
+    <!-- Amount -->
+    <span class="input-label">Amount</span>
+    <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="ps-amount" inputmode="decimal" placeholder="0.00"></div>
+    <div class="ps-hint" id="ps-hint"></div>
+
+    <button class="save-btn" onclick="submitPayment()" style="background:linear-gradient(135deg,#6B1010,#8B1A1A);animation:none">Log Payment</button>
+
+    <!-- Edit / Delete -->
+    <div class="ps-divider"></div>
+    <div class="ps-action-row">
+      <button class="ps-edit-btn" onclick="closePSAndEdit()">✏ Edit Debt</button>
+      <button class="ps-del-btn"  onclick="closePSAndDelete()">🗑 Delete</button>
+    </div>
+    <button class="close-btn" onclick="closePS()" style="margin-top:10px">Cancel</button>
   </div>
 </div>
 
@@ -498,16 +595,109 @@ function renderDebts() {
   });
 }
 
-async function logPayment(id) {
+// ── Log Payment sheet ─────────────────────────────────────────────────────────
+let psDebtId = null;
+let psPayType = 'min';
+
+function logPayment(id) {
   const d = debts.find(x=>x.id===id);
   if(!d) return;
-  const amt = prompt(`Log payment for ${d.name}\nRemaining: $${(d.balance-d.paid).toLocaleString()}\n\nEnter payment amount:`);
-  if(!amt) return;
-  const pay = parseFloat(amt);
-  if(isNaN(pay)||pay<=0) return;
-  const newPaid = Math.min(d.balance, d.paid + pay);
-  const res = await fetch(`/api/debts/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ paid: newPaid }) });
-  const result = await res.json();
+  psDebtId   = id;
+  psPayType  = 'min';
+
+  const remaining = Math.max(0, d.balance - d.paid);
+  const pct       = d.balance > 0 ? Math.min(100, Math.round((d.paid/d.balance)*100)) : 0;
+  const barColor  = pct > 75 ? '#C9A84C' : '#8B1A1A';
+
+  document.getElementById('ps-icon').textContent        = gIcon(d.name, d.type);
+  document.getElementById('ps-name').textContent        = d.name;
+  document.getElementById('ps-type-label').textContent  = d.type;
+  document.getElementById('ps-remaining').textContent   = '$'+remaining.toLocaleString('en-US',{maximumFractionDigits:0});
+  document.getElementById('ps-fill').style.width        = pct+'%';
+  document.getElementById('ps-fill').style.background   = barColor;
+
+  // Reset type buttons
+  document.querySelectorAll('.ps-type-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelector('.ps-type-btn').classList.add('active');
+
+  // Pre-fill with minimum payment
+  document.getElementById('ps-amount').value = d.min || '';
+  const hint = document.getElementById('ps-hint');
+  hint.textContent  = d.min ? 'Minimum monthly payment: $'+d.min : '';
+  hint.className    = 'ps-hint';
+
+  document.getElementById('pay-sheet').classList.add('open');
+}
+
+function setPSType(type, btn) {
+  psPayType = type;
+  const d = debts.find(x=>x.id===psDebtId);
+  if(!d) return;
+  const remaining = Math.max(0, d.balance - d.paid);
+
+  document.querySelectorAll('.ps-type-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const amtEl  = document.getElementById('ps-amount');
+  const hintEl = document.getElementById('ps-hint');
+  hintEl.className = 'ps-hint';
+
+  if (type === 'min') {
+    amtEl.value   = d.min || '';
+    hintEl.textContent = d.min ? 'Minimum monthly payment: $'+d.min : 'Enter your minimum payment';
+  } else if (type === 'extra') {
+    amtEl.value   = '';
+    amtEl.placeholder = 'Extra amount…';
+    hintEl.textContent = 'Amount above your minimum ($'+d.min+' min + this extra)';
+  } else if (type === 'full') {
+    amtEl.value   = remaining > 0 ? remaining.toFixed(2) : 0;
+    hintEl.textContent = '🎉 Full payoff — this eliminates the debt!';
+  } else {
+    amtEl.value   = '';
+    amtEl.placeholder = '0.00';
+    hintEl.textContent = 'Enter any payment amount';
+  }
+}
+
+function closePSOut(e) {
+  if (e.target === document.getElementById('pay-sheet')) closePS();
+}
+function closePS() {
+  document.getElementById('pay-sheet').classList.remove('open');
+  psDebtId = null;
+}
+function closePSAndEdit() {
+  const id = psDebtId;
+  closePS();
+  setTimeout(()=>openEditModal(id), 120);
+}
+function closePSAndDelete() {
+  const d = debts.find(x=>x.id===psDebtId);
+  if(!d) return;
+  editingId = d.id;
+  closePS();
+  document.getElementById('confirm-debt-name').textContent = d.name;
+  setTimeout(()=>document.getElementById('confirm-overlay').classList.add('show'), 120);
+}
+
+async function submitPayment() {
+  const d = debts.find(x=>x.id===psDebtId);
+  if(!d) return;
+  const raw = parseFloat(document.getElementById('ps-amount').value);
+  const hintEl = document.getElementById('ps-hint');
+  if (isNaN(raw)||raw<=0) {
+    hintEl.textContent = '⚠ Please enter a valid amount';
+    hintEl.className   = 'ps-hint error';
+    return;
+  }
+  const payAmt  = psPayType === 'extra' ? (d.min||0) + raw : raw;
+  const newPaid = Math.min(d.balance, d.paid + payAmt);
+  const res     = await fetch(`/api/debts/${d.id}`, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ paid: newPaid })
+  });
+  const result  = await res.json();
+  closePS();
   if (result.paid_off) {
     document.getElementById('cel-debt-name').textContent = d.name;
     document.getElementById('celebrate').classList.add('show');
