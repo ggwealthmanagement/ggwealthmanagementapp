@@ -53,24 +53,18 @@
   /* Entry list */
   .entry-list { display:flex; flex-direction:column; margin:0 20px; }
 
-  /* Swipe-to-delete wrapper */
-  .entry-swipe-wrap {
-    position:relative; overflow:hidden; border-radius:12px;
-    margin-bottom:8px;
-  }
-  .entry-del-bg {
-    position:absolute; right:0; top:0; bottom:0; width:76px;
-    background:#C0392B; display:flex; align-items:center; justify-content:center;
-    color:#fff; font-size:20px; border-radius:0 12px 12px 0; pointer-events:none;
-  }
-
   .entry-item {
     background:var(--card); border:1px solid var(--border); border-radius:12px;
     padding:14px 16px; display:grid; grid-template-columns:36px 1fr auto;
-    align-items:center; gap:12px;
-    position:relative; z-index:1;
-    will-change:transform; touch-action:pan-y;
+    align-items:center; gap:12px; margin-bottom:8px;
+    transition:border-color 0.18s, background 0.18s, transform 0.15s;
     animation:fadeIn 0.4s ease both;
+    -webkit-user-select:none; user-select:none;
+  }
+  .entry-item.hold-active {
+    border-color:rgba(192,57,43,0.55);
+    background:rgba(192,57,43,0.07);
+    transform:scale(0.975);
   }
   @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
   .entry-icon   { width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; }
@@ -101,10 +95,16 @@
   .fixed-item {
     background:var(--card); border:1px solid var(--border); border-radius:12px;
     padding:14px 16px; display:flex; align-items:center; gap:12px;
-    margin-bottom:8px; transition:border-color 0.2s, background 0.2s;
+    margin-bottom:8px; transition:border-color 0.18s, background 0.18s, transform 0.15s;
     animation:fadeIn 0.3s ease both;
+    -webkit-user-select:none; user-select:none;
   }
   .fixed-item.paid { border-color:rgba(26,92,46,0.35); background:rgba(26,92,46,0.05); }
+  .fixed-item.hold-active {
+    border-color:rgba(192,57,43,0.55);
+    background:rgba(192,57,43,0.07);
+    transform:scale(0.975);
+  }
 
   .fixed-check {
     width:22px; height:22px; border-radius:6px;
@@ -271,6 +271,20 @@
 
 </div>
 
+<!-- Delete Confirm Modal -->
+<div class="modal-overlay" id="del-modal">
+  <div class="modal" style="text-align:center">
+    <div class="modal-handle"></div>
+    <div style="font-size:38px;margin-bottom:10px;line-height:1">🗑</div>
+    <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:6px" id="del-modal-title">Remove this entry?</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:24px" id="del-modal-sub"></div>
+    <div style="display:flex;gap:10px">
+      <button onclick="closeDelModal()" style="flex:1;padding:14px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--muted);font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+      <button onclick="confirmDelete()" style="flex:1;padding:14px;border-radius:10px;border:none;background:#C0392B;color:#fff;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.04em">Yes, Delete</button>
+    </div>
+  </div>
+</div>
+
 <!-- Add Expense Modal -->
 <div class="modal-overlay" id="expense-modal" onclick="closeExpModal(event)">
   <div class="modal">
@@ -410,14 +424,6 @@ function renderEntries(filter) {
 
   arr.slice().reverse().forEach((e,i) => {
     const c = CAT[e.cat];
-
-    // Swipe wrapper + red delete reveal
-    const wrap = document.createElement('div');
-    wrap.className = 'entry-swipe-wrap';
-    const delBg = document.createElement('div');
-    delBg.className = 'entry-del-bg';
-    delBg.textContent = '🗑';
-
     const d = document.createElement('div');
     d.className = 'entry-item';
     d.style.animationDelay = (i*0.05)+'s';
@@ -431,70 +437,77 @@ function renderEntries(filter) {
         </div>
       </div>
       <div class="entry-amount">$${e.amount.toFixed(2)}</div>`;
-
-    wrap.appendChild(delBg);
-    wrap.appendChild(d);
-    list.appendChild(wrap);
-
-    attachSwipeDelete(d, () => deleteEntry(e.id, wrap));
+    list.appendChild(d);
+    attachHoldDelete(d, () => showDelModal('expense', e.id, e.desc, e.amount));
   });
 }
 
-// ── Swipe-to-delete ──
-function attachSwipeDelete(el, onDelete) {
-  let startX = 0, startY = 0, dx = 0, tracking = false, scrolling = null;
-  const THRESHOLD = -70;
+// ── Hold-to-delete ──
+function attachHoldDelete(el, onTrigger) {
+  let timer = null, moved = false, startX = 0, startY = 0;
+  const HOLD_MS = 550;
+
+  const cancel = () => {
+    clearTimeout(timer);
+    timer = null;
+    el.classList.remove('hold-active');
+  };
 
   el.addEventListener('touchstart', e => {
-    startX  = e.touches[0].clientX;
-    startY  = e.touches[0].clientY;
-    dx = 0; tracking = true; scrolling = null;
-    el.style.transition = 'none';
+    moved = false;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    timer = setTimeout(() => {
+      if (!moved) {
+        el.classList.remove('hold-active');
+        if (navigator.vibrate) navigator.vibrate(40);
+        onTrigger();
+      }
+    }, HOLD_MS);
+    // Show visual feedback after a short delay
+    setTimeout(() => { if (timer) el.classList.add('hold-active'); }, 120);
   }, { passive: true });
 
   el.addEventListener('touchmove', e => {
-    if (!tracking) return;
-    const cdx = e.touches[0].clientX - startX;
-    const cdy = e.touches[0].clientY - startY;
-    if (scrolling === null) scrolling = Math.abs(cdy) > Math.abs(cdx) + 4;
-    if (scrolling) return;
-    dx = Math.max(-88, Math.min(0, cdx));
-    el.style.transform = `translateX(${dx}px)`;
+    const dx = Math.abs(e.touches[0].clientX - startX);
+    const dy = Math.abs(e.touches[0].clientY - startY);
+    if (dx > 8 || dy > 8) { moved = true; cancel(); }
   }, { passive: true });
 
-  el.addEventListener('touchend', () => {
-    tracking = false;
-    if (dx < THRESHOLD) {
-      // Crossed threshold — slide out then delete
-      el.style.transition = 'transform 0.22s ease, opacity 0.22s ease';
-      el.style.transform  = 'translateX(-105%)';
-      el.style.opacity    = '0';
-      setTimeout(onDelete, 230);
-    } else {
-      // Snap back
-      el.style.transition = 'transform 0.22s ease';
-      el.style.transform  = 'translateX(0)';
-    }
-    dx = 0;
-  });
+  el.addEventListener('touchend',   cancel, { passive: true });
+  el.addEventListener('touchcancel',cancel, { passive: true });
+
+  // Desktop: right-click also opens confirm
+  el.addEventListener('contextmenu', e => { e.preventDefault(); onTrigger(); });
 }
 
-async function deleteEntry(id, wrap) {
-  await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
-  // Collapse the row with animation
-  if (wrap) {
-    wrap.style.maxHeight  = wrap.offsetHeight + 'px';
-    wrap.style.overflow   = 'hidden';
-    wrap.style.transition = 'max-height 0.28s ease, opacity 0.28s ease, margin-bottom 0.28s ease';
-    requestAnimationFrame(() => {
-      wrap.style.maxHeight    = '0';
-      wrap.style.opacity      = '0';
-      wrap.style.marginBottom = '0';
-    });
-    setTimeout(() => wrap.remove(), 300);
+// ── Delete confirm modal ──
+var _delPending = null;
+
+function showDelModal(type, id, label, amount) {
+  _delPending = { type, id };
+  document.getElementById('del-modal-title').textContent =
+    type === 'fixed' ? 'Remove this fixed expense?' : 'Remove this entry?';
+  document.getElementById('del-modal-sub').textContent =
+    label + (amount != null ? '  ·  $' + parseFloat(amount).toFixed(2) : '');
+  document.getElementById('del-modal').classList.add('open');
+}
+
+function closeDelModal() {
+  _delPending = null;
+  document.getElementById('del-modal').classList.remove('open');
+}
+
+async function confirmDelete() {
+  if (!_delPending) return;
+  const { type, id } = _delPending;
+  closeDelModal();
+  if (type === 'expense') {
+    await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
   } else {
-    await loadData();
+    await fetch(`/api/fixed/${id}`, { method: 'DELETE' });
   }
+  await loadData();
 }
 
 // ── Render fixed ──
@@ -506,15 +519,8 @@ function renderFixed() {
   document.getElementById('fixed-total').textContent = '$' + total.toLocaleString();
 
   fixedItems.forEach((f,i) => {
-    const wrap = document.createElement('div');
-    wrap.className = 'entry-swipe-wrap';
-    const delBg = document.createElement('div');
-    delBg.className = 'entry-del-bg';
-    delBg.textContent = '🗑';
-
     const d = document.createElement('div');
     d.className = 'fixed-item' + (f.paid ? ' paid' : '');
-    d.style.cssText += ';position:relative;z-index:1;will-change:transform;touch-action:pan-y;margin-bottom:0';
     d.style.animationDelay = (i*0.04)+'s';
     d.innerHTML = `
       <div class="fixed-check ${f.paid?'checked':''}" onclick="togglePaid(${f.id})">
@@ -528,16 +534,12 @@ function renderFixed() {
         <div class="fixed-amount">$${f.amount.toFixed(2)}</div>
         <div class="fixed-actions">
           <button class="act-btn" onclick="editFixed(${f.id})">Edit</button>
-          <button class="act-btn del" onclick="deleteFixed(${f.id},null)">Delete</button>
+          <button class="act-btn del" onclick="showDelModal('fixed',${f.id},'${f.name.replace(/'/g,"\\'")}',${f.amount})">Delete</button>
         </div>
         ${f.paid ? '<span class="paid-tag">✓ Paid</span>' : ''}
       </div>`;
-
-    wrap.appendChild(delBg);
-    wrap.appendChild(d);
-    list.appendChild(wrap);
-
-    attachSwipeDelete(d, () => deleteFixed(f.id, wrap));
+    list.appendChild(d);
+    attachHoldDelete(d, () => showDelModal('fixed', f.id, f.name, f.amount));
   });
 }
 
@@ -549,22 +551,6 @@ async function togglePaid(id) {
   await loadData();
 }
 
-async function deleteFixed(id, wrap) {
-  await fetch(`/api/fixed/${id}`, { method:'DELETE' });
-  if (wrap) {
-    wrap.style.maxHeight  = wrap.offsetHeight + 'px';
-    wrap.style.overflow   = 'hidden';
-    wrap.style.transition = 'max-height 0.28s ease, opacity 0.28s ease, margin-bottom 0.28s ease';
-    requestAnimationFrame(() => {
-      wrap.style.maxHeight    = '0';
-      wrap.style.opacity      = '0';
-      wrap.style.marginBottom = '0';
-    });
-    setTimeout(() => { wrap.remove(); loadData(); }, 300);
-  } else {
-    await loadData();
-  }
-}
 async function editFixed(id) {
   const f = fixedItems.find(x=>x.id===id);
   if (!f) return;
