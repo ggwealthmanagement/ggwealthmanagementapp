@@ -167,6 +167,8 @@ function seedIfEmpty() {
 // ─── Migrations (safe to run multiple times) ──────────────────────────────────
 try { db.exec("ALTER TABLE budget ADD COLUMN income_amount REAL DEFAULT 0"); } catch(e) {}
 try { db.exec("ALTER TABLE budget ADD COLUMN income_frequency TEXT DEFAULT 'weekly'"); } catch(e) {}
+try { db.exec("ALTER TABLE expenses ADD COLUMN goal_id INTEGER"); } catch(e) {}
+try { db.exec("ALTER TABLE expenses ADD COLUMN debt_id INTEGER"); } catch(e) {}
 try { db.exec("ALTER TABLE fixed_expenses ADD COLUMN paid_month TEXT"); } catch(e) {}
 try { db.exec(`
   CREATE TABLE IF NOT EXISTS paychecks (
@@ -385,15 +387,76 @@ app.get('/api/expenses', requireAuth, (req, res) => {
 
 app.post('/api/expenses', requireAuth, (req, res) => {
   const clientId = getClientId(req);
-  const { description, amount, category } = req.body;
+  const { description, amount, category, goal_id, debt_id } = req.body;
   if (!description || !amount || !category) return res.status(400).json({ error: 'Missing fields' });
+  const amt = parseFloat(amount);
+
   const r = db.prepare(
-    `INSERT INTO expenses (client_id, description, amount, category) VALUES (?,?,?,?)`
-  ).run(clientId, description, parseFloat(amount), category);
+    `INSERT INTO expenses (client_id, description, amount, category, goal_id, debt_id) VALUES (?,?,?,?,?,?)`
+  ).run(clientId, description, amt, category, goal_id || null, debt_id || null);
 
-  // Update streak
+  // ── Auto-update savings goal ──────────────────────────────────────────────
+  if (category === 'savings') {
+    let gid = goal_id;
+    if (!gid) {
+      const goals = db.prepare(
+        'SELECT * FROM savings_goals WHERE client_id = ? AND complete = 0'
+      ).all(clientId);
+      const desc = (description || '').toLowerCase();
+      const match = goals.find(g =>
+        desc.includes(g.name.toLowerCase()) || g.name.toLowerCase().includes(desc)
+      );
+      if (match) gid = match.id;
+      else {
+        const ef = goals.find(g => g.is_emergency);
+        gid = (ef || goals[0])?.id;
+      }
+    }
+    if (gid) {
+      const g = db.prepare(
+        'SELECT * FROM savings_goals WHERE id = ? AND client_id = ?'
+      ).get(gid, clientId);
+      if (g) {
+        const newAmt = g.current_amount + amt;
+        db.prepare(
+          'UPDATE savings_goals SET current_amount = ?, complete = ? WHERE id = ?'
+        ).run(newAmt, newAmt >= g.goal_amount ? 1 : 0, g.id);
+      }
+    }
+  }
+
+  // ── Auto-update debt balance ───────────────────────────────────────────────
+  if (category === 'debt') {
+    let did = debt_id;
+    if (!did) {
+      const debts = db.prepare(
+        'SELECT * FROM debts WHERE client_id = ? AND paid_off = 0'
+      ).all(clientId);
+      const desc = (description || '').toLowerCase();
+      const match = debts.find(d =>
+        desc.includes(d.name.toLowerCase()) || d.name.toLowerCase().includes(desc)
+      );
+      if (match) did = match.id;
+      else {
+        // Snowball: smallest remaining balance first
+        const sorted = debts.slice().sort((a,b) => (a.balance-a.paid)-(b.balance-b.paid));
+        did = sorted[0]?.id;
+      }
+    }
+    if (did) {
+      const d = db.prepare(
+        'SELECT * FROM debts WHERE id = ? AND client_id = ?'
+      ).get(did, clientId);
+      if (d) {
+        const newPaid = d.paid + amt;
+        db.prepare(
+          'UPDATE debts SET paid = ?, paid_off = ? WHERE id = ?'
+        ).run(newPaid, newPaid >= d.balance ? 1 : 0, d.id);
+      }
+    }
+  }
+
   updateStreak(clientId);
-
   res.json({ id: r.lastInsertRowid, ok: true });
 });
 

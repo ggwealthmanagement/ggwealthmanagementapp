@@ -74,6 +74,22 @@
   .entry-time   { font-size:9px; color:var(--muted); }
   .entry-amount { font-size:15px; font-weight:700; color:var(--white); text-align:right; }
 
+  /* Target pickers (savings goal / debt) */
+  .target-picker { margin-top:14px; }
+  .target-picker-label { font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+  .target-pill {
+    background:#0A0A0A; border:1px solid var(--border);
+    border-radius:9px; padding:10px 12px; cursor:pointer; margin-bottom:6px;
+    transition:border-color 0.15s, background 0.15s;
+  }
+  .target-pill:last-child { margin-bottom:0; }
+  .target-pill.selected { border-color:rgba(201,168,76,0.55); background:rgba(201,168,76,0.07); }
+  .target-pill .tp-top { display:flex; justify-content:space-between; margin-bottom:5px; }
+  .target-pill .tp-name { font-size:12px; font-weight:600; color:var(--white); }
+  .target-pill .tp-meta { font-size:10px; color:var(--muted); }
+  .target-pill .tp-bar { background:rgba(255,255,255,0.06); border-radius:3px; height:3px; overflow:hidden; }
+  .target-pill .tp-fill { height:100%; border-radius:3px; transition:width 0.3s; }
+
   /* Fixed expenses panel */
   .fixed-panel { display:none; flex-direction:column; padding:0 20px; }
   .fixed-panel.visible { display:flex; }
@@ -314,6 +330,18 @@
         <span class="cb-name">Debt</span>
       </div>
     </div>
+    <!-- Savings goal picker (shown when Savings selected) -->
+    <div class="target-picker" id="savings-picker" style="display:none">
+      <div class="target-picker-label">Apply to which goal? <span style="color:rgba(201,168,76,0.5)">(optional — auto-applies if skipped)</span></div>
+      <div id="goal-pill-list"></div>
+    </div>
+
+    <!-- Debt picker (shown when Debt selected) -->
+    <div class="target-picker" id="debt-picker" style="display:none">
+      <div class="target-picker-label">Apply to which debt? <span style="color:rgba(201,168,76,0.5)">(optional — auto-applies if skipped)</span></div>
+      <div id="debt-pill-list"></div>
+    </div>
+
     <button class="save-btn" onclick="saveExpense()">Add Expense</button>
   </div>
 </div>
@@ -376,7 +404,11 @@ fetch('/api/me').then(r => { if(!r.ok && !window._coachMode) window.location='/g
 
 let entries    = [];
 let fixedItems = [];
+let goalsList  = [];
+let debtsList  = [];
 let selCatVal  = null;
+let selGoalId  = null;
+let selDebtId  = null;
 let currentTab = 'all';
 
 // Set today's date in the header
@@ -389,10 +421,14 @@ let currentTab = 'all';
 // Load data from API
 async function loadData() {
   const today = new Date().toISOString().slice(0,10);
-  const [expRes, fixRes] = await Promise.all([
+  const [expRes, fixRes, goalsRes, debtsRes] = await Promise.all([
     fetch(`/api/expenses?since=${today}&until=${today}`).then(r=>r.json()),
     fetch('/api/fixed').then(r=>r.json()),
+    fetch('/api/savings').then(r=>r.json()).catch(()=>[]),
+    fetch('/api/debts').then(r=>r.json()).catch(()=>[]),
   ]);
+  goalsList = Array.isArray(goalsRes) ? goalsRes : [];
+  debtsList = Array.isArray(debtsRes) ? debtsRes : [];
   entries = expRes.map(e => ({
     id: e.id,
     desc: e.description,
@@ -592,19 +628,75 @@ function resetExpModal() {
   document.getElementById('exp-amount').value='';
   document.getElementById('exp-desc').value='';
   document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
-  selCatVal=null;
+  document.getElementById('savings-picker').style.display='none';
+  document.getElementById('debt-picker').style.display='none';
+  selCatVal=null; selGoalId=null; selDebtId=null;
 }
 function selCat(btn) {
   document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active'); selCatVal=btn.dataset.cat;
+  btn.classList.add('active');
+  selCatVal  = btn.dataset.cat;
+  selGoalId  = null;
+  selDebtId  = null;
+  const savPick  = document.getElementById('savings-picker');
+  const debtPick = document.getElementById('debt-picker');
+  savPick.style.display  = selCatVal === 'savings' ? 'block' : 'none';
+  debtPick.style.display = selCatVal === 'debt'    ? 'block' : 'none';
+  if (selCatVal === 'savings') renderGoalPills();
+  if (selCatVal === 'debt')    renderDebtPills();
 }
+function renderGoalPills() {
+  const list = document.getElementById('goal-pill-list');
+  const active = goalsList.filter(g => !g.complete);
+  list.innerHTML = active.length ? active.map(g => {
+    const pct = g.goal_amount > 0 ? Math.min(100,(g.current_amount/g.goal_amount)*100).toFixed(0) : 0;
+    const rem = Math.max(0, g.goal_amount - g.current_amount);
+    return `<div class="target-pill" id="gpill-${g.id}" onclick="selGoal(${g.id})">
+      <div class="tp-top">
+        <span class="tp-name">${g.name}${g.is_emergency ? ' 🆘' : ''}</span>
+        <span class="tp-meta">$${g.current_amount.toFixed(0)} · $${rem.toFixed(0)} to go</span>
+      </div>
+      <div class="tp-bar"><div class="tp-fill" style="width:${pct}%;background:#1A5C2E"></div></div>
+    </div>`;
+  }).join('') : '<div style="font-size:11px;color:var(--muted);padding:6px 0">No active goals</div>';
+}
+
+function selGoal(id) {
+  selGoalId = selGoalId === id ? null : id;
+  document.querySelectorAll('[id^="gpill-"]').forEach(el => el.classList.remove('selected'));
+  if (selGoalId) document.getElementById('gpill-' + selGoalId)?.classList.add('selected');
+}
+
+function renderDebtPills() {
+  const list = document.getElementById('debt-pill-list');
+  const active = debtsList.filter(d => !d.paid_off);
+  list.innerHTML = active.length ? active.map(d => {
+    const rem = Math.max(0, d.balance - d.paid);
+    const pct = d.balance > 0 ? Math.min(100,(d.paid/d.balance)*100).toFixed(0) : 0;
+    return `<div class="target-pill" id="dpill-${d.id}" onclick="selDebt(${d.id})">
+      <div class="tp-top">
+        <span class="tp-name">${d.name}</span>
+        <span class="tp-meta">$${rem.toFixed(0)} remaining</span>
+      </div>
+      <div class="tp-bar"><div class="tp-fill" style="width:${pct}%;background:#8B1A1A"></div></div>
+    </div>`;
+  }).join('') : '<div style="font-size:11px;color:var(--muted);padding:6px 0">No active debts</div>';
+}
+
+function selDebt(id) {
+  selDebtId = selDebtId === id ? null : id;
+  document.querySelectorAll('[id^="dpill-"]').forEach(el => el.classList.remove('selected'));
+  if (selDebtId) document.getElementById('dpill-' + selDebtId)?.classList.add('selected');
+}
+
 async function saveExpense() {
   const amt  = parseFloat(document.getElementById('exp-amount').value);
   const desc = document.getElementById('exp-desc').value.trim()||'Expense';
   if (!amt||amt<=0) { alert('Please enter an amount.'); return; }
   if (!selCatVal)   { alert('Please select a category.'); return; }
   await fetch('/api/expenses', { method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ description: desc, amount: amt, category: selCatVal }) });
+    body: JSON.stringify({ description: desc, amount: amt, category: selCatVal,
+                           goal_id: selGoalId || undefined, debt_id: selDebtId || undefined }) });
   await loadData();
   if (currentTab==='fixed') { showTab('all',document.querySelector('.filter-tab')); }
   resetExpModal();
