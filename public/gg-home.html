@@ -305,8 +305,11 @@
   </div>
 
   <!-- Ring card — 4 rings -->
-  <div class="ring-card fade-in" style="animation-delay:.1s">
-    <div class="ring-card-title">This Week's Budget</div>
+  <div class="ring-card fade-in" style="animation-delay:.1s;cursor:pointer" onclick="openBudgetModal()">
+    <div class="ring-card-title" style="display:flex;align-items:center;justify-content:center;gap:6px">
+      This Week's Budget
+      <span style="font-size:9px;color:var(--gold-dim);letter-spacing:0.08em;border:1px solid rgba(201,168,76,0.2);border-radius:4px;padding:2px 6px">✏ Edit</span>
+    </div>
 
     <div class="ring-container">
       <svg class="ring-svg" viewBox="0 0 220 220">
@@ -460,6 +463,57 @@
 
 </div>
 
+<!-- Budget Edit Modal -->
+<div class="modal-overlay" id="budget-modal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Edit Budget Split</div>
+    <div class="modal-sub">Set your weekly budget for each category</div>
+
+    <div id="bm-rows" style="display:flex;flex-direction:column;gap:14px;margin-bottom:20px">
+      <div class="bm-row">
+        <div class="bm-dot" style="background:#C97A2A"></div>
+        <span class="bm-label">Needs</span>
+        <div class="bm-input-wrap"><span class="bm-dollar">$</span><input class="bm-input" type="number" id="bm-fixed" placeholder="0" oninput="updateBudgetTotal()"/></div>
+      </div>
+      <div class="bm-row">
+        <div class="bm-dot" style="background:#C8B48A"></div>
+        <span class="bm-label">Wants</span>
+        <div class="bm-input-wrap"><span class="bm-dollar">$</span><input class="bm-input" type="number" id="bm-wants" placeholder="0" oninput="updateBudgetTotal()"/></div>
+      </div>
+      <div class="bm-row">
+        <div class="bm-dot" style="background:#1A5C2E"></div>
+        <span class="bm-label">Savings</span>
+        <div class="bm-input-wrap"><span class="bm-dollar">$</span><input class="bm-input" type="number" id="bm-savings" placeholder="0" oninput="updateBudgetTotal()"/></div>
+      </div>
+      <div class="bm-row">
+        <div class="bm-dot" style="background:#8B1A1A"></div>
+        <span class="bm-label">Debt</span>
+        <div class="bm-input-wrap"><span class="bm-dollar">$</span><input class="bm-input" type="number" id="bm-debt" placeholder="0" oninput="updateBudgetTotal()"/></div>
+      </div>
+    </div>
+
+    <div id="bm-total-bar" style="background:#0E0E0E;border-radius:8px;padding:12px 16px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:11px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase">Total Budgeted</span>
+      <span id="bm-total" style="font-size:15px;font-weight:700;color:var(--gold)">$0</span>
+    </div>
+    <div id="bm-warning" style="font-size:11px;color:#FF3B30;text-align:center;margin-bottom:12px;min-height:16px"></div>
+
+    <button class="modal-btn" onclick="saveBudgetSplit()">Save Budget</button>
+  </div>
+</div>
+
+<style>
+.bm-row { display:grid; grid-template-columns:14px 80px 1fr; align-items:center; gap:12px; }
+.bm-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+.bm-label { font-size:13px; font-weight:500; color:var(--white); }
+.bm-input-wrap { position:relative; }
+.bm-dollar { position:absolute; left:12px; top:50%; transform:translateY(-50%); font-size:15px; font-weight:600; color:var(--gold); pointer-events:none; }
+.bm-input { width:100%; background:#0E0E0E; border:1px solid var(--border); border-radius:8px; color:var(--white); font-family:'Inter',sans-serif; font-size:16px; font-weight:600; padding:11px 12px 11px 30px; outline:none; transition:border-color 0.2s; }
+.bm-input:focus { border-color:rgba(201,168,76,0.5); }
+.bm-input::-webkit-outer-spin-button,.bm-input::-webkit-inner-spin-button { -webkit-appearance:none; }
+</style>
+
 <!-- Income modal -->
 <div class="modal-overlay" id="modal" onclick="closeModalOutside(event)">
   <div class="modal">
@@ -521,6 +575,9 @@
 </nav>
 
 <script>
+// ── State ──
+var _budget = {}, _income = 0;
+
 // ── Auth guard ──
 async function init() {
   const meRes = await fetch('/api/me');
@@ -539,6 +596,10 @@ async function init() {
   // Streaks
   document.querySelector('.streak-badge:nth-child(1) .s-num').textContent = streaksData.logged_streak  || 0;
   document.querySelector('.streak-badge:nth-child(2) .s-num').textContent = streaksData.on_track_streak || 0;
+
+  // Store for budget edit modal
+  _budget = budget;
+  _income = budget.weekly_income || 0;
 
   // Income display — show raw amount + frequency label
   const income    = budget.weekly_income || 0;
@@ -655,6 +716,55 @@ async function init() {
 }
 
 init();
+
+// ── Budget edit modal ──
+function openBudgetModal() {
+  const alloc = {
+    fixed:   ((_budget.fixed_pct   || 0) / 100) * _income,
+    wants:   ((_budget.wants_pct   || 0) / 100) * _income,
+    savings: ((_budget.savings_pct || 0) / 100) * _income,
+    debt:    ((_budget.debt_pct    || 0) / 100) * _income,
+  };
+  document.getElementById('bm-fixed').value   = alloc.fixed   > 0 ? alloc.fixed.toFixed(0)   : '';
+  document.getElementById('bm-wants').value   = alloc.wants   > 0 ? alloc.wants.toFixed(0)   : '';
+  document.getElementById('bm-savings').value = alloc.savings > 0 ? alloc.savings.toFixed(0) : '';
+  document.getElementById('bm-debt').value    = alloc.debt    > 0 ? alloc.debt.toFixed(0)    : '';
+  updateBudgetTotal();
+  document.getElementById('budget-modal').classList.add('open');
+}
+
+function updateBudgetTotal() {
+  const vals = ['bm-fixed','bm-wants','bm-savings','bm-debt']
+    .map(id => parseFloat(document.getElementById(id).value) || 0);
+  const total = vals.reduce((a,b) => a+b, 0);
+  const totalEl = document.getElementById('bm-total');
+  const warnEl  = document.getElementById('bm-warning');
+  totalEl.textContent = '$' + total.toFixed(0) + (_income > 0 ? ' of $' + _income.toFixed(0) : '');
+  const over = _income > 0 && total > _income;
+  totalEl.style.color = over ? '#FF3B30' : 'var(--gold)';
+  warnEl.textContent  = over ? '⚠ Total exceeds your income by $' + (total - _income).toFixed(0) : '';
+}
+
+async function saveBudgetSplit() {
+  const f = parseFloat(document.getElementById('bm-fixed').value)   || 0;
+  const w = parseFloat(document.getElementById('bm-wants').value)   || 0;
+  const s = parseFloat(document.getElementById('bm-savings').value) || 0;
+  const d = parseFloat(document.getElementById('bm-debt').value)    || 0;
+  const base = _income > 0 ? _income : (f + w + s + d) || 1;
+  await fetch('/api/budget', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      ..._budget,
+      fixed_pct:   (f / base) * 100,
+      wants_pct:   (w / base) * 100,
+      savings_pct: (s / base) * 100,
+      debt_pct:    (d / base) * 100,
+    })
+  });
+  document.getElementById('budget-modal').classList.remove('open');
+  init();
+}
 
 var _currentFreq = 'weekly';
 var _freqHints = {
