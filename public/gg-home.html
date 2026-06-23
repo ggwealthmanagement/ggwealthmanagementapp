@@ -935,7 +935,7 @@ async function saveIncome() {
 // Nav links
 // Nav links (coach-aware: preserve ?clientId= when in coach mode)
 (function(){
-  const qs = window._coachMode ? '?clientId='+encodeURIComponent(window._coachClientId)+'&clientName='+encodeURIComponent(window._coachClientName) : '';
+  const qs = new URLSearchParams(window.location.search).get('clientId') ? window.location.search : '';
   document.querySelectorAll('.nav-item').forEach((el, i) => {
     const pages = [null, '/gg-daily-log.html', '/gg-debt-tracker.html', '/gg-advisor.html'];
     if (pages[i]) el.addEventListener('click', () => { window.location = pages[i]+qs; });

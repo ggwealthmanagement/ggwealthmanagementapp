@@ -771,7 +771,7 @@ fetch("/api/me").then(r=>r.json()).then(u=>{
 <script>
 // Nav wiring
 (function(){
-  var qs = window._coachMode ? "?clientId="+encodeURIComponent(window._coachClientId)+"&clientName="+encodeURIComponent(window._coachClientName) : "";
+  var qs = new URLSearchParams(window.location.search).get('clientId') ? window.location.search : "";
   var pages = ["/gg-home.html", null, "/gg-debt-tracker.html", "/gg-advisor.html"];
   document.querySelectorAll(".nav-item").forEach(function(el,i){
     if(pages[i]) el.addEventListener("click", function(){ window.location = pages[i]+qs; });
