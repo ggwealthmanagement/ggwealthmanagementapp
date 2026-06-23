@@ -167,6 +167,7 @@ function seedIfEmpty() {
 // ─── Migrations (safe to run multiple times) ──────────────────────────────────
 try { db.exec("ALTER TABLE budget ADD COLUMN income_amount REAL DEFAULT 0"); } catch(e) {}
 try { db.exec("ALTER TABLE budget ADD COLUMN income_frequency TEXT DEFAULT 'weekly'"); } catch(e) {}
+try { db.exec("ALTER TABLE fixed_expenses ADD COLUMN paid_month TEXT"); } catch(e) {}
 try { db.exec(`
   CREATE TABLE IF NOT EXISTS paychecks (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -404,8 +405,11 @@ app.delete('/api/expenses/:id', requireAuth, (req, res) => {
 
 // ─── Fixed expenses ───────────────────────────────────────────────────────────
 app.get('/api/fixed', requireAuth, (req, res) => {
-  const clientId = getClientId(req);
-  res.json(db.prepare('SELECT * FROM fixed_expenses WHERE client_id = ? ORDER BY id').all(clientId));
+  const clientId   = getClientId(req);
+  const thisMonth  = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+  const rows = db.prepare('SELECT * FROM fixed_expenses WHERE client_id = ? ORDER BY id').all(clientId);
+  // is_paid = true only if paid this calendar month
+  res.json(rows.map(r => ({ ...r, is_paid: r.paid_month === thisMonth ? 1 : 0 })));
 });
 
 app.post('/api/fixed', requireAuth, (req, res) => {
@@ -424,8 +428,13 @@ app.put('/api/fixed/:id', requireAuth, (req, res) => {
   const existing = db.prepare('SELECT * FROM fixed_expenses WHERE id = ? AND client_id = ?').get(req.params.id, clientId);
   if (!existing) return res.status(404).json({ error: 'Not found' });
 
+  const thisMonth   = new Date().toISOString().slice(0, 7);
+  const newPaidMonth = paid != null
+    ? (paid ? thisMonth : null)
+    : existing.paid_month;
+
   db.prepare(`
-    UPDATE fixed_expenses SET name=?, amount=?, due_day=?, paid=?, paid_date=?
+    UPDATE fixed_expenses SET name=?, amount=?, due_day=?, paid=?, paid_date=?, paid_month=?
     WHERE id = ? AND client_id = ?
   `).run(
     name    ?? existing.name,
@@ -433,6 +442,7 @@ app.put('/api/fixed/:id', requireAuth, (req, res) => {
     due_day ?? existing.due_day,
     paid    != null ? (paid ? 1 : 0) : existing.paid,
     paid    != null ? (paid ? new Date().toISOString() : null) : existing.paid_date,
+    newPaidMonth,
     req.params.id, clientId
   );
 

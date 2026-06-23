@@ -323,7 +323,7 @@
   <!-- Ring card — 4 rings -->
   <div class="ring-card fade-in" style="animation-delay:.1s;cursor:pointer" onclick="openBudgetModal()">
     <div class="ring-card-title" style="display:flex;align-items:center;justify-content:center;gap:6px">
-      This Week's Budget
+      This Month's Budget
       <span style="font-size:9px;color:var(--gold-dim);letter-spacing:0.08em;border:1px solid rgba(201,168,76,0.2);border-radius:4px;padding:2px 6px">✏ Edit</span>
     </div>
 
@@ -442,7 +442,7 @@
     <div class="stat-card">
       <div class="stat-label">Total Saved</div>
       <div class="stat-value">$64</div>
-      <div class="stat-sub">this <span class="hl">week</span></div>
+      <div class="stat-sub">this <span class="hl">month</span></div>
       <div class="mini-track">
         <div class="mini-fill" style="width:32%;background:linear-gradient(90deg,#1A5C2E,#3DAA68)"></div>
       </div>
@@ -458,7 +458,7 @@
     </div>
 
     <div class="stat-card">
-      <div class="stat-label">Paid This Week</div>
+      <div class="stat-label">Paid This Month</div>
       <div class="stat-value">$149</div>
       <div class="stat-sub">toward <span class="hl">debt</span></div>
       <div class="mini-track">
@@ -468,10 +468,10 @@
 
   </div>
 
-  <!-- Weekly teaser -->
+  <!-- Monthly teaser -->
   <div class="weekly-teaser fade-in" style="animation-delay:.17s">
     <div>
-      <div class="wt-title">📊 Weekly Summary</div>
+      <div class="wt-title">📊 Monthly Summary</div>
       <div class="wt-sub">Thu Jun 4 — See full breakdown</div>
     </div>
     <div class="wt-arrow">›</div>
@@ -647,19 +647,19 @@ async function init() {
   document.querySelector('.streak-badge:nth-child(1) .s-num').textContent = streaksData.logged_streak  || 0;
   document.querySelector('.streak-badge:nth-child(2) .s-num').textContent = streaksData.on_track_streak || 0;
 
-  // Store for budget edit modal
+  // Store for budget edit modal (will be set to monthlyProjected after freq calc below)
   _budget = budget;
-  _income = budget.weekly_income || 0;
 
   // Income display — show raw amount + frequency label
   const income    = budget.weekly_income || 0;
   const rawAmt    = budget.income_amount    || income;
   const freq      = budget.income_frequency || 'weekly';
-  // Calculate monthly projected
+  // Calculate monthly projected and set _income for budget edit modal
   let monthlyProjected = 0;
   if (freq === 'monthly')   monthlyProjected = rawAmt;
   else if (freq === 'biweekly') monthlyProjected = rawAmt * 2.17;
   else monthlyProjected = rawAmt * 4.33; // weekly
+  _income = monthlyProjected; // budget edit modal uses monthly amounts
 
   // Projected display (always show monthly equivalent)
   var lbl = document.getElementById('income-label');
@@ -683,25 +683,24 @@ async function init() {
   document.getElementById('received-pct-label').textContent = pctLbl;
   document.getElementById('received-bar').style.width = pct + '%';
 
-  // Week start
+  // Month start — filter expenses for the current calendar month
   const now = new Date();
-  const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay());
-  const since = weekStart.toISOString().slice(0,10);
-  const weekExpenses = expRes.filter(e => e.created_at >= since + 'T00:00:00' || e.created_at.slice(0,10) >= since);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+  const monthExpenses = expRes.filter(e => (e.created_at || '').slice(0,10) >= monthStart);
 
-  // Spending by category this week
+  // Spending by category this month
   const spent = { fixed:0, wants:0, savings:0, debt:0 };
-  weekExpenses.forEach(e => { if (spent[e.category] != null) spent[e.category] += e.amount; });
+  monthExpenses.forEach(e => { if (spent[e.category] != null) spent[e.category] += e.amount; });
   const totalSpent = Object.values(spent).reduce((a,b)=>a+b, 0);
 
-  // Budget allocation
+  // Budget allocation — monthly amounts
   const alloc = {
-    fixed:   (budget.fixed_pct   / 100) * income,
-    wants:   (budget.wants_pct   / 100) * income,
-    savings: (budget.savings_pct / 100) * income,
-    debt:    (budget.debt_pct    / 100) * income,
+    fixed:   (budget.fixed_pct   / 100) * monthlyProjected,
+    wants:   (budget.wants_pct   / 100) * monthlyProjected,
+    savings: (budget.savings_pct / 100) * monthlyProjected,
+    debt:    (budget.debt_pct    / 100) * monthlyProjected,
   };
-  const totalAlloc = income;
+  const totalAlloc = monthlyProjected;
 
   // Update ring SVG
   const RADII  = { debt:96, savings:76, wants:56, fixed:36 };
@@ -759,7 +758,7 @@ async function init() {
   document.querySelectorAll('.stat-card')[1].innerHTML = `
     <div class="stat-label">Total Saved</div>
     <div class="stat-value">$${spent.savings.toFixed(0)}</div>
-    <div class="stat-sub">this <span class="hl">week</span></div>
+    <div class="stat-sub">this <span class="hl">month</span></div>
     <div class="mini-track"><div class="mini-fill" style="width:${alloc.savings>0?Math.min(100,(spent.savings/alloc.savings)*100).toFixed(0):0}%;background:linear-gradient(90deg,#1A5C2E,#3DAA68)"></div></div>`;
 
   const activeDebts = debtRes.filter(d => !d.paid_off).sort((a,b) => (a.balance-a.paid)-(b.balance-b.paid));
@@ -774,13 +773,14 @@ async function init() {
       <div class="mini-track"><div class="mini-fill" style="width:${pct.toFixed(0)}%;background:linear-gradient(90deg,#5C0A0A,#8B1A1A)"></div></div>`;
   }
   document.querySelectorAll('.stat-card')[3].innerHTML = `
-    <div class="stat-label">Paid This Week</div>
+    <div class="stat-label">Paid This Month</div>
     <div class="stat-value">$${spent.debt.toFixed(0)}</div>
     <div class="stat-sub">toward <span class="hl">debt</span></div>
     <div class="mini-track"><div class="mini-fill" style="width:${alloc.debt>0?Math.min(100,(spent.debt/alloc.debt)*100).toFixed(0):0}%;background:linear-gradient(90deg,#5C0A0A,#8B1A1A)"></div></div>`;
 
-  // Weekly teaser date
-  document.querySelector('.wt-sub').textContent = weekStart.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + ' — See full breakdown';
+  // Monthly teaser date
+  const monthName = now.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  document.querySelector('.wt-sub').textContent = monthName + ' — See full breakdown';
 }
 
 init();
