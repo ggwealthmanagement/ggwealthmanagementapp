@@ -170,6 +170,19 @@ try { db.exec("ALTER TABLE budget ADD COLUMN income_frequency TEXT DEFAULT 'week
 try { db.exec("ALTER TABLE expenses ADD COLUMN goal_id INTEGER"); } catch(e) {}
 try { db.exec("ALTER TABLE expenses ADD COLUMN debt_id INTEGER"); } catch(e) {}
 try { db.exec("ALTER TABLE fixed_expenses ADD COLUMN paid_month TEXT"); } catch(e) {}
+// One-time cleanup: remove expenses that were auto-posted when marking fixed bills as paid
+try {
+  db.exec(`
+    DELETE FROM expenses
+    WHERE category = 'fixed'
+    AND EXISTS (
+      SELECT 1 FROM fixed_expenses fe
+      WHERE fe.client_id = expenses.client_id
+      AND fe.name = expenses.description
+    )
+  `);
+  console.log('✅ Cleaned up auto-posted fixed expense entries');
+} catch(e) { console.log('Migration note:', e.message); }
 try { db.exec(`
   CREATE TABLE IF NOT EXISTS paychecks (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -509,23 +522,8 @@ app.put('/api/fixed/:id', requireAuth, (req, res) => {
     req.params.id, clientId
   );
 
-  // If marking paid → add to expenses log; if unpaying → remove
-  if (paid != null) {
-    if (paid) {
-      db.prepare(`INSERT INTO expenses (client_id, description, amount, category) VALUES (?,?,?,'fixed')`)
-        .run(clientId, name ?? existing.name, amount ?? existing.amount);
-      updateStreak(clientId);
-    } else {
-      // Remove the auto-posted expense (most recent match)
-      db.prepare(`
-        DELETE FROM expenses WHERE id = (
-          SELECT id FROM expenses
-          WHERE client_id = ? AND description = ? AND category = 'fixed'
-          ORDER BY created_at DESC LIMIT 1
-        )
-      `).run(clientId, name ?? existing.name);
-    }
-  }
+  // Streak update on pay (bills panel is separate from expense log)
+  if (paid) updateStreak(clientId);
 
   res.json({ ok: true });
 });

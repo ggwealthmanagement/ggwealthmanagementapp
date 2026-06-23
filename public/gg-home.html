@@ -188,6 +188,23 @@
   .wt-sub   { font-size: 10px; color: var(--muted); }
   .wt-arrow { color: var(--gold-dim); font-size: 20px; }
 
+  /* ── Monthly Bills card ── */
+  .bills-card {
+    margin: 0 20px 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+  }
+  .bc-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .bc-label  { font-size:9px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:var(--muted); }
+  .bc-count  { font-size:10px; font-weight:600; color:var(--gold); }
+  .bc-track  { height:5px; background:rgba(255,255,255,0.06); border-radius:3px; overflow:hidden; margin-bottom:8px; }
+  .bc-fill   { height:100%; border-radius:3px; background:linear-gradient(90deg,#C97A2A,#E8A94C); transition:width 0.5s ease; }
+  .bc-amounts { display:flex; justify-content:space-between; align-items:baseline; }
+  .bc-paid   { font-size:18px; font-weight:700; color:var(--white); }
+  .bc-total  { font-size:11px; color:var(--muted); }
+
   /* ── Bottom nav ── */
   .bottom-nav {
     position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
@@ -425,6 +442,19 @@
     <div class="cl-item"><div class="cl-dot" style="background:#8B1A1A"></div><span class="cl-name">Debt</span></div>
   </div>
 
+  <!-- Monthly Bills card -->
+  <div class="bills-card fade-in" id="bills-card" style="animation-delay:.12s">
+    <div class="bc-header">
+      <span class="bc-label">🏠 Monthly Bills</span>
+      <span class="bc-count" id="bills-count">— of — paid</span>
+    </div>
+    <div class="bc-track"><div class="bc-fill" id="bills-fill" style="width:0%"></div></div>
+    <div class="bc-amounts">
+      <span class="bc-paid" id="bills-paid">$0</span>
+      <span class="bc-total" id="bills-total">of $0 total</span>
+    </div>
+  </div>
+
   <div class="section-divider"><span>Progress</span></div>
 
   <!-- Quick stats — now 4 cards in 2x2 -->
@@ -634,13 +664,14 @@ async function init() {
   const me = await meRes.json();
   document.querySelector('.client-name').textContent = window._coachMode ? window._coachClientName : me.name;
 
-  const [budget, streaksData, expRes, debtRes, savRes, paychecksRes] = await Promise.all([
+  const [budget, streaksData, expRes, debtRes, savRes, paychecksRes, fixedBills] = await Promise.all([
     fetch('/api/budget').then(r=>r.json()),
     fetch('/api/streaks').then(r=>r.json()),
     fetch('/api/expenses').then(r=>r.json()),
     fetch('/api/debts').then(r=>r.json()),
     fetch('/api/savings').then(r=>r.json()),
     fetch('/api/paychecks').then(r=>r.json()).catch(()=>[]),
+    fetch('/api/fixed').then(r=>r.json()).catch(()=>[]),
   ]);
 
   // Streaks
@@ -745,6 +776,18 @@ async function init() {
     st.textContent = left >= 0 ? '$'+left.toFixed(0)+' left' : '$'+Math.abs(left).toFixed(0)+' over!';
     st.className = 'cat-status ' + (pct >= 100 ? 'over' : pct >= 80 ? 'warn' : 'ok');
   });
+
+  // Monthly Bills card
+  if (Array.isArray(fixedBills) && fixedBills.length > 0) {
+    const billsTotal  = fixedBills.reduce((s, b) => s + b.amount, 0);
+    const billsPaid   = fixedBills.filter(b => b.is_paid).reduce((s, b) => s + b.amount, 0);
+    const paidCount   = fixedBills.filter(b => b.is_paid).length;
+    const fillPct     = billsTotal > 0 ? Math.min(100, (billsPaid / billsTotal) * 100) : 0;
+    document.getElementById('bills-count').textContent = paidCount + ' of ' + fixedBills.length + ' paid';
+    document.getElementById('bills-fill').style.width  = fillPct + '%';
+    document.getElementById('bills-paid').textContent  = '$' + billsPaid.toLocaleString('en-US', {maximumFractionDigits:0});
+    document.getElementById('bills-total').textContent = 'of $' + billsTotal.toLocaleString('en-US', {maximumFractionDigits:0}) + ' total';
+  }
 
   // Quick stats — emergency fund
   const ef = savRes.find(g => g.is_emergency);
