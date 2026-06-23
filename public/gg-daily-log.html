@@ -52,10 +52,24 @@
 
   /* Entry list */
   .entry-list { display:flex; flex-direction:column; margin:0 20px; }
+
+  /* Swipe-to-delete wrapper */
+  .entry-swipe-wrap {
+    position:relative; overflow:hidden; border-radius:12px;
+    margin-bottom:8px;
+  }
+  .entry-del-bg {
+    position:absolute; right:0; top:0; bottom:0; width:76px;
+    background:#C0392B; display:flex; align-items:center; justify-content:center;
+    color:#fff; font-size:20px; border-radius:0 12px 12px 0; pointer-events:none;
+  }
+
   .entry-item {
     background:var(--card); border:1px solid var(--border); border-radius:12px;
     padding:14px 16px; display:grid; grid-template-columns:36px 1fr auto;
-    align-items:center; gap:12px; margin-bottom:8px;
+    align-items:center; gap:12px;
+    position:relative; z-index:1;
+    will-change:transform; touch-action:pan-y;
     animation:fadeIn 0.4s ease both;
   }
   @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
@@ -396,6 +410,14 @@ function renderEntries(filter) {
 
   arr.slice().reverse().forEach((e,i) => {
     const c = CAT[e.cat];
+
+    // Swipe wrapper + red delete reveal
+    const wrap = document.createElement('div');
+    wrap.className = 'entry-swipe-wrap';
+    const delBg = document.createElement('div');
+    delBg.className = 'entry-del-bg';
+    delBg.textContent = '🗑';
+
     const d = document.createElement('div');
     d.className = 'entry-item';
     d.style.animationDelay = (i*0.05)+'s';
@@ -409,8 +431,70 @@ function renderEntries(filter) {
         </div>
       </div>
       <div class="entry-amount">$${e.amount.toFixed(2)}</div>`;
-    list.appendChild(d);
+
+    wrap.appendChild(delBg);
+    wrap.appendChild(d);
+    list.appendChild(wrap);
+
+    attachSwipeDelete(d, () => deleteEntry(e.id, wrap));
   });
+}
+
+// ── Swipe-to-delete ──
+function attachSwipeDelete(el, onDelete) {
+  let startX = 0, startY = 0, dx = 0, tracking = false, scrolling = null;
+  const THRESHOLD = -70;
+
+  el.addEventListener('touchstart', e => {
+    startX  = e.touches[0].clientX;
+    startY  = e.touches[0].clientY;
+    dx = 0; tracking = true; scrolling = null;
+    el.style.transition = 'none';
+  }, { passive: true });
+
+  el.addEventListener('touchmove', e => {
+    if (!tracking) return;
+    const cdx = e.touches[0].clientX - startX;
+    const cdy = e.touches[0].clientY - startY;
+    if (scrolling === null) scrolling = Math.abs(cdy) > Math.abs(cdx) + 4;
+    if (scrolling) return;
+    dx = Math.max(-88, Math.min(0, cdx));
+    el.style.transform = `translateX(${dx}px)`;
+  }, { passive: true });
+
+  el.addEventListener('touchend', () => {
+    tracking = false;
+    if (dx < THRESHOLD) {
+      // Crossed threshold — slide out then delete
+      el.style.transition = 'transform 0.22s ease, opacity 0.22s ease';
+      el.style.transform  = 'translateX(-105%)';
+      el.style.opacity    = '0';
+      setTimeout(onDelete, 230);
+    } else {
+      // Snap back
+      el.style.transition = 'transform 0.22s ease';
+      el.style.transform  = 'translateX(0)';
+    }
+    dx = 0;
+  });
+}
+
+async function deleteEntry(id, wrap) {
+  await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
+  // Collapse the row with animation
+  if (wrap) {
+    wrap.style.maxHeight  = wrap.offsetHeight + 'px';
+    wrap.style.overflow   = 'hidden';
+    wrap.style.transition = 'max-height 0.28s ease, opacity 0.28s ease, margin-bottom 0.28s ease';
+    requestAnimationFrame(() => {
+      wrap.style.maxHeight    = '0';
+      wrap.style.opacity      = '0';
+      wrap.style.marginBottom = '0';
+    });
+    setTimeout(() => wrap.remove(), 300);
+  } else {
+    await loadData();
+  }
 }
 
 // ── Render fixed ──
@@ -422,8 +506,15 @@ function renderFixed() {
   document.getElementById('fixed-total').textContent = '$' + total.toLocaleString();
 
   fixedItems.forEach((f,i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'entry-swipe-wrap';
+    const delBg = document.createElement('div');
+    delBg.className = 'entry-del-bg';
+    delBg.textContent = '🗑';
+
     const d = document.createElement('div');
     d.className = 'fixed-item' + (f.paid ? ' paid' : '');
+    d.style.cssText += ';position:relative;z-index:1;will-change:transform;touch-action:pan-y;margin-bottom:0';
     d.style.animationDelay = (i*0.04)+'s';
     d.innerHTML = `
       <div class="fixed-check ${f.paid?'checked':''}" onclick="togglePaid(${f.id})">
@@ -437,11 +528,16 @@ function renderFixed() {
         <div class="fixed-amount">$${f.amount.toFixed(2)}</div>
         <div class="fixed-actions">
           <button class="act-btn" onclick="editFixed(${f.id})">Edit</button>
-          <button class="act-btn del" onclick="deleteFixed(${f.id})">Delete</button>
+          <button class="act-btn del" onclick="deleteFixed(${f.id},null)">Delete</button>
         </div>
         ${f.paid ? '<span class="paid-tag">✓ Paid</span>' : ''}
       </div>`;
-    list.appendChild(d);
+
+    wrap.appendChild(delBg);
+    wrap.appendChild(d);
+    list.appendChild(wrap);
+
+    attachSwipeDelete(d, () => deleteFixed(f.id, wrap));
   });
 }
 
@@ -453,9 +549,21 @@ async function togglePaid(id) {
   await loadData();
 }
 
-async function deleteFixed(id) {
+async function deleteFixed(id, wrap) {
   await fetch(`/api/fixed/${id}`, { method:'DELETE' });
-  await loadData();
+  if (wrap) {
+    wrap.style.maxHeight  = wrap.offsetHeight + 'px';
+    wrap.style.overflow   = 'hidden';
+    wrap.style.transition = 'max-height 0.28s ease, opacity 0.28s ease, margin-bottom 0.28s ease';
+    requestAnimationFrame(() => {
+      wrap.style.maxHeight    = '0';
+      wrap.style.opacity      = '0';
+      wrap.style.marginBottom = '0';
+    });
+    setTimeout(() => { wrap.remove(); loadData(); }, 300);
+  } else {
+    await loadData();
+  }
 }
 async function editFixed(id) {
   const f = fixedItems.find(x=>x.id===id);
