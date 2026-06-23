@@ -296,12 +296,28 @@
   </div>
 
   <!-- Income -->
-  <div class="income-bar fade-in" style="animation-delay:.05s">
-    <div>
-      <div class="income-label" id="income-label">Income</div>
-      <div class="income-amount" id="income-display">$— <span>/ weekly</span></div>
+  <div class="income-bar fade-in" style="animation-delay:.05s; flex-direction:column; gap:10px; align-items:stretch">
+    <!-- Row 1: projected vs received stats -->
+    <div style="display:flex; gap:10px">
+      <div style="flex:1; background:#0E0E0E; border:1px solid var(--border); border-radius:10px; padding:10px 14px">
+        <div class="income-label" id="income-label" style="margin-bottom:3px">Projected</div>
+        <div class="income-amount" id="income-display" style="font-size:18px;line-height:1.2">$— <span style="font-size:11px;color:var(--muted)">/ mo</span></div>
+      </div>
+      <div style="flex:1; background:#0E0E0E; border:1px solid rgba(201,168,76,0.25); border-radius:10px; padding:10px 14px">
+        <div class="income-label" style="color:var(--gold);margin-bottom:3px">Received</div>
+        <div id="received-display" style="font-size:18px;font-weight:700;color:var(--white);line-height:1.2">$0</div>
+        <div id="received-pct-label" style="font-size:10px;color:var(--muted);margin-top:2px">this month</div>
+      </div>
     </div>
-    <button class="income-edit-btn" onclick="openModal()">+ Update</button>
+    <!-- Row 2: progress bar -->
+    <div style="background:rgba(255,255,255,0.05); border-radius:4px; height:5px; overflow:hidden">
+      <div id="received-bar" style="height:100%; width:0%; background:linear-gradient(90deg,#B8923E,#E2C472); border-radius:4px; transition:width 0.6s ease"></div>
+    </div>
+    <!-- Row 3: action buttons -->
+    <div style="display:flex; gap:8px">
+      <button class="income-edit-btn" style="flex:1" onclick="openModal()">✏ Update Plan</button>
+      <button class="income-edit-btn" style="flex:1; background:rgba(201,168,76,0.12); border:1px solid rgba(201,168,76,0.25)" onclick="openPaycheckModal()">+ Log Paycheck</button>
+    </div>
   </div>
 
   <!-- Ring card — 4 rings -->
@@ -514,6 +530,39 @@
 .bm-input::-webkit-outer-spin-button,.bm-input::-webkit-inner-spin-button { -webkit-appearance:none; }
 </style>
 
+<!-- Log Paycheck Modal -->
+<div class="modal-overlay" id="paycheck-modal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Log Paycheck</div>
+    <div class="modal-sub">Record income you actually received</div>
+
+    <div class="modal-input-wrap">
+      <span class="currency">$</span>
+      <input class="modal-input" id="pc-amount" type="number" placeholder="0" style="padding-left:42px"/>
+    </div>
+
+    <div style="display:flex; gap:10px; margin-bottom:18px">
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;letter-spacing:0.08em;text-transform:uppercase">Date Received</div>
+        <input id="pc-date" type="date" style="width:100%;background:#0E0E0E;border:1px solid var(--border);border-radius:8px;color:var(--white);font-family:'Inter',sans-serif;font-size:14px;font-weight:500;padding:10px 12px;outline:none"/>
+      </div>
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;letter-spacing:0.08em;text-transform:uppercase">Source</div>
+        <input id="pc-source" type="text" placeholder="e.g. Main job" style="width:100%;background:#0E0E0E;border:1px solid var(--border);border-radius:8px;color:var(--white);font-family:'Inter',sans-serif;font-size:14px;padding:10px 12px;outline:none"/>
+      </div>
+    </div>
+
+    <!-- Recent entries list -->
+    <div id="pc-list-wrap" style="margin-bottom:18px">
+      <div style="font-size:11px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px">This Month</div>
+      <div id="pc-list" style="display:flex;flex-direction:column;gap:6px;max-height:140px;overflow-y:auto"></div>
+    </div>
+
+    <button class="modal-btn" onclick="savePaycheck()">Log Paycheck</button>
+  </div>
+</div>
+
 <!-- Income modal -->
 <div class="modal-overlay" id="modal" onclick="closeModalOutside(event)">
   <div class="modal">
@@ -585,12 +634,13 @@ async function init() {
   const me = await meRes.json();
   document.querySelector('.client-name').textContent = window._coachMode ? window._coachClientName : me.name;
 
-  const [budget, streaksData, expRes, debtRes, savRes] = await Promise.all([
+  const [budget, streaksData, expRes, debtRes, savRes, paychecksRes] = await Promise.all([
     fetch('/api/budget').then(r=>r.json()),
     fetch('/api/streaks').then(r=>r.json()),
     fetch('/api/expenses').then(r=>r.json()),
     fetch('/api/debts').then(r=>r.json()),
     fetch('/api/savings').then(r=>r.json()),
+    fetch('/api/paychecks').then(r=>r.json()).catch(()=>[]),
   ]);
 
   // Streaks
@@ -605,15 +655,33 @@ async function init() {
   const income    = budget.weekly_income || 0;
   const rawAmt    = budget.income_amount    || income;
   const freq      = budget.income_frequency || 'weekly';
-  const freqLabel = freq === 'biweekly' ? 'Bi-Weekly' : freq === 'monthly' ? 'Monthly' : 'Weekly';
-  const freqSub   = freq === 'biweekly' ? 'bi-weekly' : freq === 'monthly' ? 'monthly' : 'weekly';
+  // Calculate monthly projected
+  let monthlyProjected = 0;
+  if (freq === 'monthly')   monthlyProjected = rawAmt;
+  else if (freq === 'biweekly') monthlyProjected = rawAmt * 2.17;
+  else monthlyProjected = rawAmt * 4.33; // weekly
+
+  // Projected display (always show monthly equivalent)
   var lbl = document.getElementById('income-label');
-  if (lbl) lbl.textContent = freqLabel + ' Income';
+  if (lbl) lbl.textContent = 'Projected';
   document.getElementById('income-display').innerHTML =
-    '$' + rawAmt.toLocaleString('en-US',{minimumFractionDigits:0}) + ' <span>/ ' + freqSub + '</span>';
+    '$' + Math.round(monthlyProjected).toLocaleString('en-US') + ' <span style="font-size:11px;color:var(--muted)">/ mo</span>';
   document.getElementById('income-input').value = rawAmt > 0 ? rawAmt : '';
   // Sync modal freq tab
   setFreq(freq, false);
+
+  // Received income this month from paychecks
+  const paychecks = Array.isArray(paychecksRes) ? paychecksRes : [];
+  const receivedTotal = paychecks.reduce((s, p) => s + (p.amount || 0), 0);
+  document.getElementById('received-display').innerHTML =
+    '$' + receivedTotal.toLocaleString('en-US', {minimumFractionDigits:0});
+  const pct = monthlyProjected > 0 ? Math.min((receivedTotal / monthlyProjected) * 100, 100) : 0;
+  const diff = receivedTotal - monthlyProjected;
+  const pctLbl = monthlyProjected > 0
+    ? (diff >= 0 ? '+$' + Math.round(diff).toLocaleString() + ' over plan' : '$' + Math.round(Math.abs(diff)).toLocaleString() + ' to go')
+    : 'this month';
+  document.getElementById('received-pct-label').textContent = pctLbl;
+  document.getElementById('received-bar').style.width = pct + '%';
 
   // Week start
   const now = new Date();
@@ -716,6 +784,62 @@ async function init() {
 }
 
 init();
+
+// ── Paycheck modal ──
+async function openPaycheckModal() {
+  // Default date to today
+  document.getElementById('pc-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('pc-amount').value = '';
+  document.getElementById('pc-source').value = '';
+  // Load this month's paychecks into the list
+  await refreshPaycheckList();
+  document.getElementById('paycheck-modal').classList.add('open');
+}
+
+async function refreshPaycheckList() {
+  const list = document.getElementById('pc-list');
+  list.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:8px">Loading…</div>';
+  try {
+    const rows = await fetch('/api/paychecks').then(r=>r.json());
+    if (!rows.length) {
+      list.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:8px">None logged yet</div>';
+      return;
+    }
+    list.innerHTML = rows.map(p => `
+      <div style="display:flex;align-items:center;justify-content:space-between;background:#0E0E0E;border:1px solid var(--border);border-radius:8px;padding:8px 12px">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--white)">$${parseFloat(p.amount).toLocaleString('en-US',{minimumFractionDigits:2})}</div>
+          <div style="font-size:10px;color:var(--muted)">${p.pay_date}${p.source ? ' · ' + p.source : ''}</div>
+        </div>
+        <button onclick="deletePaycheck(${p.id})" style="background:none;border:none;color:rgba(255,59,48,0.7);font-size:16px;cursor:pointer;padding:4px 8px">✕</button>
+      </div>
+    `).join('');
+  } catch(e) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:8px">Could not load</div>';
+  }
+}
+
+async function savePaycheck() {
+  const amount = parseFloat(document.getElementById('pc-amount').value);
+  if (!amount || amount <= 0) { alert('Enter a valid amount'); return; }
+  const pay_date = document.getElementById('pc-date').value || new Date().toISOString().slice(0,10);
+  const source   = document.getElementById('pc-source').value.trim();
+  await fetch('/api/paychecks', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ amount, pay_date, source })
+  });
+  document.getElementById('pc-amount').value = '';
+  document.getElementById('pc-source').value = '';
+  await refreshPaycheckList();
+  init(); // refresh the received total on the home page
+}
+
+async function deletePaycheck(id) {
+  await fetch('/api/paychecks/' + id, { method: 'DELETE' });
+  await refreshPaycheckList();
+  init();
+}
 
 // ── Budget edit modal ──
 function openBudgetModal() {

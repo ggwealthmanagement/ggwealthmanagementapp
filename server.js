@@ -167,6 +167,16 @@ function seedIfEmpty() {
 // ─── Migrations (safe to run multiple times) ──────────────────────────────────
 try { db.exec("ALTER TABLE budget ADD COLUMN income_amount REAL DEFAULT 0"); } catch(e) {}
 try { db.exec("ALTER TABLE budget ADD COLUMN income_frequency TEXT DEFAULT 'weekly'"); } catch(e) {}
+try { db.exec(`
+  CREATE TABLE IF NOT EXISTS paychecks (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    amount     REAL    NOT NULL,
+    pay_date   TEXT    NOT NULL DEFAULT (date('now','localtime')),
+    source     TEXT    NOT NULL DEFAULT '',
+    created_at TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+  )
+`); } catch(e) {}
 
 seedIfEmpty();
 
@@ -329,6 +339,34 @@ app.put('/api/budget', requireAuth, (req, res) => {
     savings_pct ?? 10,
     debt_pct    ?? 15
   );
+  res.json({ ok: true });
+});
+
+// ─── Paychecks ────────────────────────────────────────────────────────────────
+app.get('/api/paychecks', requireAuth, (req, res) => {
+  const clientId = getClientId(req);
+  const { month } = req.query; // optional YYYY-MM filter
+  const prefix = month || new Date().toISOString().slice(0, 7); // default current month
+  const rows = db.prepare(
+    `SELECT * FROM paychecks WHERE client_id = ? AND pay_date LIKE ? ORDER BY pay_date DESC`
+  ).all(clientId, prefix + '%');
+  res.json(rows);
+});
+
+app.post('/api/paychecks', requireAuth, (req, res) => {
+  const clientId = getClientId(req);
+  const { amount, pay_date, source } = req.body;
+  if (!amount || isNaN(parseFloat(amount))) return res.status(400).json({ error: 'Invalid amount' });
+  const r = db.prepare(
+    `INSERT INTO paychecks (client_id, amount, pay_date, source) VALUES (?,?,?,?)`
+  ).run(clientId, parseFloat(amount), pay_date || new Date().toISOString().slice(0, 10), source || '');
+  res.json({ id: r.lastInsertRowid, ok: true });
+});
+
+app.delete('/api/paychecks/:id', requireAuth, (req, res) => {
+  const clientId = getClientId(req);
+  const r = db.prepare('DELETE FROM paychecks WHERE id = ? AND client_id = ?').run(req.params.id, clientId);
+  if (r.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
 });
 
