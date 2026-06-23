@@ -372,6 +372,20 @@ var statusCfg = {
   good: { label:'On Track',    bar:'#1A5C2E', badge:'good' },
 };
 
+function fmtMsgTime(ts) {
+  if (!ts) return '';
+  // SQLite returns 'YYYY-MM-DD HH:MM:SS' — replace space with T for reliable cross-browser parsing
+  var d = new Date(ts.replace(' ', 'T'));
+  if (isNaN(d)) return ts;
+  var now = new Date();
+  var todayStr = now.toDateString();
+  var yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+  var timeStr = d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+  if (d.toDateString() === todayStr) return timeStr;
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday · ' + timeStr;
+  return d.toLocaleDateString('en-US', {month:'short', day:'numeric'}) + ' · ' + timeStr;
+}
+
 function sortClients() {
   var order = { over:0, risk:1, good:2 };
   clients.sort(function(a,b){ return order[a.status] - order[b.status]; });
@@ -457,7 +471,7 @@ function openDetail(id) {
   c.activity.forEach(function(a) {
     html += '<div class="act-item">';
     html += '<div class="act-icon">' + a.icon + '</div>';
-    html += '<div><div class="act-name">' + a.name + '</div><div class="act-meta">' + a.cat + ' · ' + a.time + '</div></div>';
+    html += '<div><div class="act-name">' + a.name + '</div><div class="act-meta">' + a.cat + ' · ' + fmtMsgTime(a.time) + '</div></div>';
     html += '<div class="act-amt">$' + a.amt.toFixed(2) + '</div>';
     html += '</div>';
   });
@@ -499,7 +513,7 @@ function renderNotes(c) {
   c.notes.forEach(function(n) {
     var div = document.createElement('div');
     div.className = 'note-item ' + n.from;
-    div.innerHTML = '<div class="note-hdr"><span class="note-from">' + (n.from==='coach' ? 'Gustavo & Greys' : c.name) + '</span><span class="note-time">' + n.time + '</span></div><div class="note-txt">' + n.text + '</div>';
+    div.innerHTML = '<div class="note-hdr"><span class="note-from">' + (n.from==='coach' ? 'Gustavo & Greys' : c.name) + '</span><span class="note-time">' + fmtMsgTime(n.time) + '</span></div><div class="note-txt">' + n.text + '</div>';
     list.appendChild(div);
   });
 }

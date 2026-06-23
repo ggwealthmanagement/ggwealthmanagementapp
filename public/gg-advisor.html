@@ -196,8 +196,17 @@ fetch('/api/me').then(r => { if(!r.ok && !window._coachMode) window.location='/g
 let currentUser = null;
 
 function fmtTime(ts) {
-  const d = new Date(ts);
-  return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  if (!ts) return '';
+  // SQLite returns 'YYYY-MM-DD HH:MM:SS' — replace space with T for reliable cross-browser parsing
+  const d = new Date(ts.replace(' ', 'T'));
+  if (isNaN(d)) return ts;
+  const now = new Date();
+  const todayStr = now.toDateString();
+  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+  const timeStr = d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+  if (d.toDateString() === todayStr) return timeStr;
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday · ' + timeStr;
+  return d.toLocaleDateString('en-US', {month:'short', day:'numeric'}) + ' · ' + timeStr;
 }
 
 function renderMessage(msg) {

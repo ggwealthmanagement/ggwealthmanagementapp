@@ -673,7 +673,7 @@ app.post('/api/messages', requireAuth, (req, res) => {
   }
   if (!toId) return res.status(400).json({ error: 'No recipient' });
 
-  const r = db.prepare('INSERT INTO messages (from_id, to_id, text) VALUES (?,?,?)').run(fromId, toId, text.trim());
+  const r = db.prepare("INSERT INTO messages (from_id, to_id, text, created_at) VALUES (?,?,?,datetime('now','localtime'))").run(fromId, toId, text.trim());
   const msg = db.prepare(`
     SELECT m.*, u.name as sender_name, u.role as sender_role
     FROM messages m JOIN users u ON u.id = m.from_id WHERE m.id = ?
