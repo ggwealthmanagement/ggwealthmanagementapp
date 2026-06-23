@@ -377,237 +377,361 @@
 // Auth guard
 fetch('/api/me').then(r => { if(!r.ok && !window._coachMode) window.location='/gg-login.html'; });
 
-// Load real summary data
-async function loadSummary() {
-  try {
-    const data = await fetch('/api/summary').then(r=>r.json());
-    // Update score card with real week data
-    const today = new Date();
-    const weekStart = new Date(today); weekStart.setDate(today.getDate() - today.getDay());
-    const label = weekStart.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + today.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-    document.getElementById('period-label').textContent = label;
-    if(data.week) {
-      document.getElementById('total-spent').textContent  = '$'+(data.week.spent||0).toLocaleString();
-      document.getElementById('total-budget').textContent = '$'+(data.week.budget||0).toLocaleString();
-      document.getElementById('remaining').textContent    = '$'+Math.max(0,(data.week.budget||0)-(data.week.spent||0)).toLocaleString();
-      document.getElementById('total-saved').textContent  = '$'+(data.week.saved||0).toLocaleString();
-      document.getElementById('debt-paid').textContent    = '$'+(data.week.debtPaid||0).toLocaleString();
-      const score = data.week.score || 75;
-      document.getElementById('score-num').textContent = score;
-      const circumference = 213.6;
-      document.getElementById('score-arc').style.strokeDashoffset = circumference - (score/100)*circumference;
-    }
-    // Day-by-day bars from real expense data
-    if(data.dailyThisWeek) {
-      data.dailyThisWeek.forEach((amt, i) => { if(i < days.length) days[i].amt = amt; });
-      renderDays();
-    }
-  } catch(e) { /* keep defaults */ }
-}
-
-// Period switcher (kept with sensible defaults)
-const periods = {
-  week:    { label:'This Week',    spent:0, budget:0, remaining:0, saved:0, debt:0, score:0, title:'Loading…', desc:'' },
-  month:   { label:'This Month',   spent:0, budget:0, remaining:0, saved:0, debt:0, score:0, title:'Loading…', desc:'' },
-  quarter: { label:'This Quarter', spent:0, budget:0, remaining:0, saved:0, debt:0, score:0, title:'Loading…', desc:'' },
+// ── Config ──────────────────────────────────────────────────────────────────
+const catMeta = {
+  fixed:   { name:'Fixed',   color:'#C97A2A', icon:'🏠' },
+  wants:   { name:'Wants',   color:'#C8B48A', icon:'🛒' },
+  savings: { name:'Savings', color:'#1A5C2E', icon:'💰' },
+  debt:    { name:'Debt',    color:'#8B1A1A', icon:'💳' },
 };
 
-function setPeriod(key, tab) {
-  document.querySelectorAll('.period-tab').forEach(t=>t.classList.remove('active'));
-  tab.classList.add('active');
-  const d = periods[key];
-  document.getElementById('period-label').textContent  = d.label;
-  document.getElementById('total-spent').textContent   = '$'+d.spent.toLocaleString();
-  document.getElementById('total-budget').textContent  = '$'+d.budget.toLocaleString();
-  document.getElementById('remaining').textContent     = '$'+d.remaining.toLocaleString();
-  document.getElementById('total-saved').textContent   = '$'+d.saved.toLocaleString();
-  document.getElementById('debt-paid').textContent     = '$'+d.debt.toLocaleString();
-  document.getElementById('score-num').textContent     = d.score;
-  document.getElementById('score-title').textContent   = d.title;
-  document.getElementById('score-desc').textContent    = d.desc;
-  // Update score arc
-  const circumference = 213.6;
-  const offset = circumference - (d.score/100)*circumference;
-  document.getElementById('score-arc').style.strokeDashoffset = offset;
+let currentPeriod = 'week';
+let currentData   = null;
+
+// ── Income helpers ───────────────────────────────────────────────────────────
+function computeMonthlyIncome(b) {
+  const raw  = parseFloat(b.income_amount) || parseFloat(b.weekly_income) || 0;
+  const freq = b.income_frequency || 'weekly';
+  if (freq === 'monthly')  return raw;
+  if (freq === 'biweekly') return raw * 2.17;
+  return raw * 4.33; // weekly
 }
 
-// Day by day bar chart
-const days = [
-  {name:'Mon', amt:210, today:false},
-  {name:'Tue', amt:85,  today:false},
-  {name:'Wed', amt:320, today:false},
-  {name:'Thu', amt:95,  today:true },
-  {name:'Fri', amt:0,   today:false},
-  {name:'Sat', amt:0,   today:false},
-  {name:'Sun', amt:0,   today:false},
-];
-const maxAmt = Math.max(...days.map(d=>d.amt), 1);
+function periodBudgetTotal(b, period) {
+  const monthly = computeMonthlyIncome(b);
+  if (period === 'week')    return monthly / 4.33;
+  if (period === 'quarter') return monthly * 3;
+  return monthly;
+}
 
-function renderDays() {
+function catBudgets(b, total) {
+  return {
+    fixed:   total * (parseFloat(b.fixed_pct)   || 50) / 100,
+    wants:   total * (parseFloat(b.wants_pct)   || 25) / 100,
+    savings: total * (parseFloat(b.savings_pct) || 10) / 100,
+    debt:    total * (parseFloat(b.debt_pct)    || 15) / 100,
+  };
+}
+
+function periodLabel(period) {
+  const now = new Date();
+  if (period === 'week') {
+    const ws = new Date(now); ws.setDate(now.getDate() - now.getDay());
+    return ws.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' +
+           now.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  }
+  if (period === 'month') return now.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  const q = Math.floor(now.getMonth()/3)+1;
+  return 'Q'+q+' '+now.getFullYear();
+}
+
+// ── Fetch & render ───────────────────────────────────────────────────────────
+async function loadPeriod(period) {
+  const qs = window._coachMode ? '&clientId='+encodeURIComponent(window._coachClientId) : '';
+  try {
+    const data = await fetch('/api/summary?period='+period+qs).then(r=>r.json());
+    currentData = data;
+    renderAll(period, data);
+  } catch(e) { console.error('Summary load error', e); }
+}
+
+function renderAll(period, data) {
+  const expenses = data.expenses || [];
+  const budget   = data.budget   || {};
+  const streaks  = data.streaks  || {};
+
+  // Totals
+  const spent = { fixed:0, wants:0, savings:0, debt:0 };
+  expenses.forEach(e => { if (spent[e.category] != null) spent[e.category] += e.amount; });
+  const totalSpent  = Object.values(spent).reduce((s,v)=>s+v, 0);
+  const totalBudget = periodBudgetTotal(budget, period);
+  const cats        = catBudgets(budget, totalBudget);
+  const remaining   = Math.max(0, totalBudget - totalSpent);
+
+  // Header
+  document.getElementById('period-label').textContent = periodLabel(period);
+
+  // Stats
+  document.getElementById('total-spent').textContent  = '$'+Math.round(totalSpent).toLocaleString();
+  document.getElementById('total-budget').textContent = '$'+Math.round(totalBudget).toLocaleString();
+  const remEl = document.getElementById('remaining');
+  remEl.textContent  = '$'+Math.round(remaining).toLocaleString();
+  remEl.className    = 'sb-value '+(remaining<=0?'red':'green');
+  document.getElementById('total-saved').textContent = '$'+Math.round(spent.savings).toLocaleString();
+  document.getElementById('debt-paid').textContent   = '$'+Math.round(spent.debt).toLocaleString();
+
+  // Score
+  const score = computeScore(spent, cats, streaks);
+  document.getElementById('score-num').textContent = score;
+  const circ = 213.6;
+  document.getElementById('score-arc').style.strokeDashoffset = circ - (score/100)*circ;
+  const {title, desc} = scoreLabel(score, spent, cats);
+  document.getElementById('score-title').textContent = title;
+  document.getElementById('score-desc').textContent  = desc;
+  const badges = document.querySelectorAll('.ss-badge .ss-text');
+  if (badges[0]) badges[0].textContent = (streaks.logged_streak||0)+' Days Logged';
+  if (badges[1]) badges[1].textContent = (streaks.on_track_streak||0)+' On Track';
+
+  // Sections
+  renderCatBreakdown(spent, cats);
+  renderBarChart(period, expenses);
+  renderTopExpenses(expenses);
+  renderWinLoss(spent, cats, streaks, period);
+  setTimeout(()=>drawLineChart(period, expenses), 60);
+}
+
+// ── Score ────────────────────────────────────────────────────────────────────
+function computeScore(spent, cats, streaks) {
+  let s = 0;
+  ['fixed','wants','savings','debt'].forEach(cat => {
+    if (cats[cat] > 0 && spent[cat] <= cats[cat]) s += 20;
+  });
+  if ((streaks.logged_streak||0) >= 3)    s += 10;
+  if ((streaks.on_track_streak||0) >= 3)  s += 10;
+  return Math.min(100, Math.max(0, s));
+}
+
+function scoreLabel(score, spent, cats) {
+  if (score >= 90) return { title:'Excellent Work! 🌟', desc:"You're crushing your budget. Keep up the amazing momentum!" };
+  if (score >= 70) return { title:'Great Progress!',    desc:'Staying under budget in most categories. A few small tweaks will get you to 100.' };
+  if (score >= 50) return { title:'Good Start',         desc:"You're on the right track. Focus on the categories that are over budget." };
+  if (score >= 30) return { title:'Keep Going',         desc:'Budget needs attention. Log every day and cut back where you can.' };
+  return { title:'Needs Attention', desc:"Most categories are over budget. Let's review with your coach." };
+}
+
+// ── Category breakdown ───────────────────────────────────────────────────────
+function renderCatBreakdown(spent, cats) {
+  const bd = document.querySelector('.cat-breakdown');
+  bd.innerHTML = '';
+  ['debt','savings','wants','fixed'].forEach(cat => {
+    const m    = catMeta[cat];
+    const s    = spent[cat]||0;
+    const b    = cats[cat]||1;
+    const pct  = Math.min(100, Math.round((s/b)*100));
+    const left = b-s;
+    const status = pct>=100?'over':pct>=80?'warn':'ok';
+    const stTxt  = pct>=100?'$'+Math.abs(left).toFixed(0)+' over!':pct>=80?'Near limit':'On Track';
+    bd.innerHTML += `<div class="cb-row">
+      <div class="cb-dot" style="background:${m.color}"></div>
+      <div class="cb-info">
+        <div class="cb-name">${m.name}</div>
+        <div class="cb-track"><div class="cb-fill" style="width:${pct}%;background:${m.color}"></div></div>
+      </div>
+      <div class="cb-spent">$${s.toFixed(0)}</div>
+      <div class="cb-status ${status}">${stTxt}</div>
+    </div>`;
+  });
+}
+
+// ── Bar chart (day/week/month view) ──────────────────────────────────────────
+function renderBarChart(period, expenses) {
   const grid = document.getElementById('day-grid');
   grid.innerHTML = '';
-  days.forEach(d => {
-    const pct = d.amt > 0 ? Math.max(8, (d.amt/maxAmt)*80) : 4;
+  const now = new Date();
+  let labels, amts, curIdx;
+
+  if (period === 'week') {
+    labels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    amts   = Array(7).fill(0);
+    expenses.forEach(e => {
+      const d = new Date(e.created_at.replace(' ','T'));
+      amts[d.getDay()] += e.amount;
+    });
+    curIdx = now.getDay();
+  } else if (period === 'month') {
+    labels = ['Wk 1','Wk 2','Wk 3','Wk 4'];
+    amts   = Array(4).fill(0);
+    expenses.forEach(e => {
+      const d  = new Date(e.created_at.replace(' ','T'));
+      const wk = Math.min(3, Math.floor((d.getDate()-1)/7));
+      amts[wk] += e.amount;
+    });
+    curIdx = Math.min(3, Math.floor((now.getDate()-1)/7));
+  } else {
+    const qStart    = Math.floor(now.getMonth()/3)*3;
+    const mNames    = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    labels = [mNames[qStart], mNames[qStart+1], mNames[qStart+2]];
+    amts   = Array(3).fill(0);
+    expenses.forEach(e => {
+      const d    = new Date(e.created_at.replace(' ','T'));
+      const mIdx = d.getMonth()-qStart;
+      if (mIdx>=0 && mIdx<3) amts[mIdx] += e.amount;
+    });
+    curIdx = now.getMonth()-qStart;
+  }
+
+  const maxA = Math.max(...amts, 1);
+  labels.forEach((name, i) => {
+    const amt = amts[i];
+    const pct = amt>0 ? Math.max(8,(amt/maxA)*80) : 4;
+    const isNow = i===curIdx;
     const col = document.createElement('div');
-    col.className = 'day-col'+(d.today?' today':'');
+    col.className = 'day-col'+(isNow?' today':'');
     col.innerHTML = `
       <div class="day-bar-wrap">
-        <div class="day-bar" style="height:${pct}px;background:${d.today?'#C9A84C':d.amt>0?'rgba(201,168,76,0.35)':'rgba(255,255,255,0.05)'}"></div>
+        <div class="day-bar" style="height:${pct}px;background:${isNow?'#C9A84C':amt>0?'rgba(201,168,76,0.35)':'rgba(255,255,255,0.05)'}"></div>
       </div>
-      <div class="day-name">${d.name}</div>
-      <div class="day-amt">${d.amt>0?'$'+d.amt:'-'}</div>`;
+      <div class="day-name">${name}</div>
+      <div class="day-amt">${amt>0?'$'+Math.round(amt):'-'}</div>`;
     grid.appendChild(col);
   });
 }
-renderDays();
-loadSummary();
 
-// Progress chart data
-const chartData = {
-  week: {
-    title: 'This Week — Day by Day',
-    labels: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
-    spent:  [210, 85, 320, 95, 0, 0, 0],
-    saved:  [20,  10, 20,  14, 0, 0, 0],
-    debt:   [0,   0,  149, 0,  0, 0, 0],
-  },
-  month: {
-    title: 'This Month — Week by Week',
-    labels: ['Wk 1','Wk 2','Wk 3','Wk 4'],
-    spent:  [720, 890, 640, 640],
-    saved:  [60,  80,  56,  60],
-    debt:   [149, 149, 149, 149],
-  },
-  quarter: {
-    title: 'This Quarter — Month by Month',
-    labels: ['April','May','June'],
-    spent:  [2950, 2800, 2490],
-    saved:  [200,  300,  320],
-    debt:   [596,  596,  596],
-  },
-};
+// ── Top expenses ─────────────────────────────────────────────────────────────
+function renderTopExpenses(expenses) {
+  const list = document.querySelector('.expense-list');
+  list.innerHTML = '';
+  const catIcons = { fixed:'🏠', wants:'🛒', savings:'💰', debt:'💳' };
+  const sorted = [...expenses].sort((a,b)=>b.amount-a.amount).slice(0,5);
+  if (!sorted.length) {
+    list.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:20px">No expenses logged yet</div>';
+    return;
+  }
+  sorted.forEach((e,i) => {
+    const m = catMeta[e.category]||{color:'#C9A84C',name:e.category};
+    list.innerHTML += `<div class="exp-item">
+      <div class="exp-rank">#${i+1}</div>
+      <div class="exp-icon">${catIcons[e.category]||'💸'}</div>
+      <div class="exp-info">
+        <div class="exp-name">${e.description||'Expense'}</div>
+        <div class="exp-cat" style="color:${m.color}">${m.name}</div>
+      </div>
+      <div class="exp-amt">$${e.amount.toFixed(2)}</div>
+    </div>`;
+  });
+}
 
-let currentChartPeriod = 'week';
+// ── Win / loss ────────────────────────────────────────────────────────────────
+function renderWinLoss(spent, cats, streaks, period) {
+  const periodName = period==='week'?'This Week':period==='month'?'This Month':'This Quarter';
+  document.querySelectorAll('.section-label').forEach(el => {
+    if (el.textContent.startsWith('This ')) el.textContent = periodName;
+  });
+  const wins  = [];
+  const focus = [];
+  if ((streaks.logged_streak||0) >= 3)    wins.push('Logged '+(streaks.logged_streak)+' days in a row 🔥');
+  if ((streaks.on_track_streak||0) >= 2)  wins.push('On track '+(streaks.on_track_streak)+' consecutive days');
+  ['fixed','wants','savings','debt'].forEach(cat => {
+    const b=cats[cat]||0, s=spent[cat]||0;
+    if (b>0 && s<=b && s>0)   wins.push('Under budget on '+catMeta[cat].name);
+    if (b>0 && s>b)           focus.push(catMeta[cat].name+' $'+(s-b).toFixed(0)+' over budget');
+    if (cat==='savings' && b>0 && s<b*0.5) focus.push('Increase savings contributions');
+  });
+  if (!wins.length)  wins.push('Keep logging your expenses!');
+  if (!focus.length) focus.push('Great job — keep it up! 🌟');
+  document.querySelector('.wl-card.win').innerHTML  = '<div class="wl-title">🏆 Wins</div>'  +wins.slice(0,4).map(w=>'<div class="wl-item">'+w+'</div>').join('');
+  document.querySelector('.wl-card.loss').innerHTML = '<div class="wl-title">📈 Focus On</div>'+focus.slice(0,4).map(f=>'<div class="wl-item">'+f+'</div>').join('');
+}
 
-function drawChart(period) {
-  currentChartPeriod = period;
-  const data   = chartData[period];
-  const canvas = document.getElementById('progress-canvas');
-  const ctx2   = canvas.getContext('2d');
-  const dpr    = window.devicePixelRatio||1;
-  const rect   = canvas.getBoundingClientRect();
-  canvas.width  = rect.width * dpr;
-  canvas.height = rect.height * dpr;
-  ctx2.scale(dpr, dpr);
-  const W = rect.width, H = rect.height;
-  const pad = { top:10, right:10, bottom:20, left:36 };
-  const chartW = W - pad.left - pad.right;
-  const chartH = H - pad.top - pad.bottom;
-  const n = data.labels.length;
+// ── Line chart (Progress Over Time) ──────────────────────────────────────────
+function drawLineChart(period, expenses) {
+  const now    = new Date();
+  let labels, spentArr, savedArr, debtArr, title;
 
-  // Max value
-  const allVals = [...data.spent, ...data.saved, ...data.debt];
-  const maxVal  = Math.max(...allVals, 1);
-
-  function xPos(i) { return pad.left + (i/(n-1||1))*chartW; }
-  function yPos(v) { return pad.top + chartH - (v/maxVal)*chartH; }
-
-  ctx2.clearRect(0,0,W,H);
-
-  // Grid lines
-  for(let i=0;i<=4;i++) {
-    const y = pad.top + (i/4)*chartH;
-    ctx2.beginPath();
-    ctx2.strokeStyle = 'rgba(255,255,255,0.04)';
-    ctx2.lineWidth = 1;
-    ctx2.moveTo(pad.left, y);
-    ctx2.lineTo(W-pad.right, y);
-    ctx2.stroke();
-    // Y label
-    const val = Math.round(maxVal*(1-i/4));
-    ctx2.fillStyle = 'rgba(90,85,80,0.8)';
-    ctx2.font = '9px Inter, sans-serif';
-    ctx2.textAlign = 'right';
-    ctx2.fillText('$'+val.toLocaleString(), pad.left-4, y+3);
+  if (period === 'week') {
+    title = 'This Week — Day by Day';
+    labels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    spentArr = Array(7).fill(0); savedArr = Array(7).fill(0); debtArr = Array(7).fill(0);
+    expenses.forEach(e => {
+      const d=new Date(e.created_at.replace(' ','T')), i=d.getDay();
+      spentArr[i]+=e.amount;
+      if(e.category==='savings') savedArr[i]+=e.amount;
+      if(e.category==='debt')    debtArr[i]+=e.amount;
+    });
+  } else if (period === 'month') {
+    title = 'This Month — Week by Week';
+    labels = ['Wk 1','Wk 2','Wk 3','Wk 4'];
+    spentArr = Array(4).fill(0); savedArr = Array(4).fill(0); debtArr = Array(4).fill(0);
+    expenses.forEach(e => {
+      const d=new Date(e.created_at.replace(' ','T')), wk=Math.min(3,Math.floor((d.getDate()-1)/7));
+      spentArr[wk]+=e.amount;
+      if(e.category==='savings') savedArr[wk]+=e.amount;
+      if(e.category==='debt')    debtArr[wk]+=e.amount;
+    });
+  } else {
+    title = 'This Quarter — Month by Month';
+    const qStart=Math.floor(now.getMonth()/3)*3;
+    const mNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    labels = [mNames[qStart],mNames[qStart+1],mNames[qStart+2]];
+    spentArr = Array(3).fill(0); savedArr = Array(3).fill(0); debtArr = Array(3).fill(0);
+    expenses.forEach(e => {
+      const d=new Date(e.created_at.replace(' ','T')), mIdx=d.getMonth()-qStart;
+      if(mIdx>=0&&mIdx<3){
+        spentArr[mIdx]+=e.amount;
+        if(e.category==='savings') savedArr[mIdx]+=e.amount;
+        if(e.category==='debt')    debtArr[mIdx]+=e.amount;
+      }
+    });
   }
 
-  // Draw line function
-  function drawLine(values, color, dotColor, dash=[]) {
-    if(n===1) return;
-    ctx2.save();
-    ctx2.strokeStyle = color;
-    ctx2.lineWidth   = 2;
-    ctx2.lineJoin    = 'round';
-    ctx2.lineCap     = 'round';
-    if(dash.length) ctx2.setLineDash(dash);
+  document.getElementById('chart-title').textContent = title;
 
-    // Area fill
-    ctx2.beginPath();
-    ctx2.moveTo(xPos(0), yPos(values[0]));
-    for(let i=1;i<n;i++) {
-      const xc = (xPos(i-1)+xPos(i))/2;
-      ctx2.bezierCurveTo(xc, yPos(values[i-1]), xc, yPos(values[i]), xPos(i), yPos(values[i]));
-    }
-    ctx2.lineTo(xPos(n-1), pad.top+chartH);
-    ctx2.lineTo(xPos(0), pad.top+chartH);
-    ctx2.closePath();
-    const grad = ctx2.createLinearGradient(0,pad.top,0,pad.top+chartH);
-    grad.addColorStop(0, color.replace(')',',0.18)').replace('rgb','rgba'));
-    grad.addColorStop(1, 'transparent');
-    ctx2.fillStyle = grad;
-    ctx2.fill();
+  const canvas=document.getElementById('progress-canvas'), ctx2=canvas.getContext('2d');
+  const dpr=window.devicePixelRatio||1, rect=canvas.getBoundingClientRect();
+  canvas.width=rect.width*dpr; canvas.height=rect.height*dpr;
+  ctx2.scale(dpr,dpr);
+  const W=rect.width, H=rect.height;
+  const pad={top:10,right:10,bottom:20,left:36};
+  const chartW=W-pad.left-pad.right, chartH=H-pad.top-pad.bottom;
+  const n=labels.length;
+  const allVals=[...spentArr,...savedArr,...debtArr];
+  const maxVal=Math.max(...allVals,1);
+  const xPos=i=>pad.left+(i/(n-1||1))*chartW;
+  const yPos=v=>pad.top+chartH-(v/maxVal)*chartH;
 
-    // Line
-    ctx2.beginPath();
-    ctx2.moveTo(xPos(0), yPos(values[0]));
-    for(let i=1;i<n;i++) {
-      const xc = (xPos(i-1)+xPos(i))/2;
-      ctx2.bezierCurveTo(xc, yPos(values[i-1]), xc, yPos(values[i]), xPos(i), yPos(values[i]));
-    }
+  ctx2.clearRect(0,0,W,H);
+  for(let i=0;i<=4;i++){
+    const y=pad.top+(i/4)*chartH;
+    ctx2.beginPath(); ctx2.strokeStyle='rgba(255,255,255,0.04)'; ctx2.lineWidth=1;
+    ctx2.moveTo(pad.left,y); ctx2.lineTo(W-pad.right,y); ctx2.stroke();
+    ctx2.fillStyle='rgba(90,85,80,0.8)'; ctx2.font='9px Inter,sans-serif'; ctx2.textAlign='right';
+    ctx2.fillText('$'+Math.round(maxVal*(1-i/4)).toLocaleString(), pad.left-4, y+3);
+  }
+
+  function drawLine(values,color,dotColor){
+    if(n===1)return;
+    ctx2.save(); ctx2.strokeStyle=color; ctx2.lineWidth=2; ctx2.lineJoin='round'; ctx2.lineCap='round';
+    ctx2.beginPath(); ctx2.moveTo(xPos(0),yPos(values[0]));
+    for(let i=1;i<n;i++){const xc=(xPos(i-1)+xPos(i))/2; ctx2.bezierCurveTo(xc,yPos(values[i-1]),xc,yPos(values[i]),xPos(i),yPos(values[i]));}
+    ctx2.lineTo(xPos(n-1),pad.top+chartH); ctx2.lineTo(xPos(0),pad.top+chartH); ctx2.closePath();
+    const grad=ctx2.createLinearGradient(0,pad.top,0,pad.top+chartH);
+    const rgba=color.startsWith('#') ? hexToRgba(color,0.18) : color.replace(')',',0.18)').replace('rgb','rgba');
+    grad.addColorStop(0,rgba); grad.addColorStop(1,'transparent');
+    ctx2.fillStyle=grad; ctx2.fill();
+    ctx2.beginPath(); ctx2.moveTo(xPos(0),yPos(values[0]));
+    for(let i=1;i<n;i++){const xc=(xPos(i-1)+xPos(i))/2; ctx2.bezierCurveTo(xc,yPos(values[i-1]),xc,yPos(values[i]),xPos(i),yPos(values[i]));}
     ctx2.stroke();
-
-    // Dots
     ctx2.setLineDash([]);
-    values.forEach((v,i) => {
-      if(v===0) return;
-      ctx2.beginPath();
-      ctx2.arc(xPos(i), yPos(v), 4, 0, Math.PI*2);
-      ctx2.fillStyle = dotColor;
-      ctx2.fill();
-      ctx2.strokeStyle = '#080808';
-      ctx2.lineWidth = 1.5;
-      ctx2.stroke();
-    });
+    values.forEach((v,i)=>{if(v===0)return;ctx2.beginPath();ctx2.arc(xPos(i),yPos(v),4,0,Math.PI*2);ctx2.fillStyle=dotColor;ctx2.fill();ctx2.strokeStyle='#080808';ctx2.lineWidth=1.5;ctx2.stroke();});
     ctx2.restore();
   }
 
-  drawLine(data.spent, '#C9A84C', '#E2C472');
-  drawLine(data.saved, '#1A5C2E', '#3DAA68');
-  drawLine(data.debt,  '#8B1A1A', '#C05050');
+  function hexToRgba(hex, a){
+    const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+    return `rgba(${r},${g},${b},${a})`;
+  }
 
-  // Update labels
-  const lblContainer = document.getElementById('pc-labels');
-  lblContainer.innerHTML = '';
-  data.labels.forEach(l => {
-    const sp = document.createElement('div');
-    sp.className = 'pc-label';
-    sp.textContent = l;
-    lblContainer.appendChild(sp);
-  });
+  drawLine(spentArr,'#C9A84C','#E2C472');
+  drawLine(savedArr,'#1A5C2E','#3DAA68');
+  drawLine(debtArr, '#8B1A1A','#C05050');
 
-  document.getElementById('chart-title').textContent = data.title;
+  const lbl=document.getElementById('pc-labels'); lbl.innerHTML='';
+  labels.forEach(l=>{const sp=document.createElement('div');sp.className='pc-label';sp.textContent=l;lbl.appendChild(sp);});
 }
 
-// Hook into period switcher
-const origSetPeriod = setPeriod;
-setPeriod = function(key, tab) {
-  origSetPeriod(key, tab);
-  drawChart(key);
-};
+// ── Period switcher ───────────────────────────────────────────────────────────
+function setPeriod(key, tab) {
+  currentPeriod = key;
+  document.querySelectorAll('.period-tab').forEach(t=>t.classList.remove('active'));
+  tab.classList.add('active');
+  loadPeriod(key);
+}
 
-// Initial draw after layout
-setTimeout(() => drawChart('week'), 100);
-window.addEventListener('resize', () => drawChart(currentChartPeriod));
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadPeriod('week');
+window.addEventListener('resize', ()=>{
+  if (currentData) drawLineChart(currentPeriod, currentData.expenses||[]);
+});
 
 // Sparkle
 const canvas=document.getElementById('sparkle-canvas'),ctx=canvas.getContext('2d');
