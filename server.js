@@ -175,6 +175,17 @@ try { db.exec("ALTER TABLE budget ADD COLUMN income_frequency TEXT DEFAULT 'week
 try { db.exec("ALTER TABLE expenses ADD COLUMN goal_id INTEGER"); } catch(e) {}
 try { db.exec("ALTER TABLE expenses ADD COLUMN debt_id INTEGER"); } catch(e) {}
 try { db.exec("ALTER TABLE fixed_expenses ADD COLUMN paid_month TEXT"); } catch(e) {}
+// ─── Column migrations (idempotent ALTER TABLE) ───────────────────────────────
+(function runColumnMigrations() {
+  const add = (table, col, def) => {
+    try { db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`); } catch(e) { /* already exists */ }
+  };
+  add('messages', 'is_read',       'INTEGER NOT NULL DEFAULT 0');
+  add('users',    'last_active',   'TEXT');
+  add('budget',   'income_amount', 'REAL');
+  add('budget',   'income_frequency', "TEXT NOT NULL DEFAULT 'weekly'");
+})();
+
 // One-time cleanup: remove expenses that were auto-posted when marking fixed bills as paid
 try {
   const alreadyRan = db.prepare("SELECT 1 FROM migrations WHERE name='cleanup_fixed_autopost'").get();
@@ -297,6 +308,9 @@ app.post('/api/login', (req, res) => {
   req.session.userId = user.id;
   req.session.role   = user.role;
   req.session.name   = user.name;
+
+  // Stamp last_active on every login
+  db.prepare("UPDATE users SET last_active = datetime('now','localtime') WHERE id = ?").run(user.id);
 
   res.json({
     id:   user.id,
@@ -724,6 +738,16 @@ app.post('/api/messages', requireAuth, (req, res) => {
   res.json(msg);
 });
 
+// Mark messages from a specific client (or to a specific client) as read
+// Coach calls this when they open a client's detail view
+app.put('/api/messages/read-all', requireCoach, (req, res) => {
+  const { clientId } = req.body;
+  if (!clientId) return res.status(400).json({ error: 'clientId required' });
+  // Mark all messages sent by this client as read
+  db.prepare('UPDATE messages SET is_read = 1 WHERE from_id = ? AND is_read = 0').run(parseInt(clientId));
+  res.json({ ok: true });
+});
+
 // ─── Streaks ──────────────────────────────────────────────────────────────────
 app.get('/api/streaks', requireAuth, (req, res) => {
   const clientId = getClientId(req);
@@ -768,7 +792,7 @@ function updateStreak(clientId) {
 
 // ─── Coach: clients list ──────────────────────────────────────────────────────
 app.get('/api/coach/clients', requireCoach, (req, res) => {
-  const clients = db.prepare("SELECT id, username, name, color FROM users WHERE role = 'client' ORDER BY name").all();
+  const clients = db.prepare("SELECT id, username, name, color, last_active FROM users WHERE role = 'client' ORDER BY name").all();
 
   const result = clients.map(c => {
     const budget  = db.prepare('SELECT * FROM budget WHERE client_id = ?').get(c.id) || { weekly_income: 0, fixed_pct: 50, wants_pct: 25, savings_pct: 10, debt_pct: 15 };
@@ -805,11 +829,11 @@ app.get('/api/coach/clients', requireCoach, (req, res) => {
                  : overCount === 1 || totalSpent > totalBudget * 0.9  ? 'risk'
                  : 'good';
 
-    // Unread = message from client not yet replied to by coach
-    const lastMsg = db.prepare(`
-      SELECT * FROM messages WHERE (from_id=? OR to_id=?) ORDER BY created_at DESC LIMIT 1
-    `).get(c.id, c.id);
-    const unread = lastMsg && lastMsg.from_id === c.id;
+    // Unread = any message from client that hasn't been marked read yet
+    const unreadCount = db.prepare(
+      'SELECT COUNT(*) as cnt FROM messages WHERE from_id = ? AND is_read = 0'
+    ).get(c.id).cnt;
+    const unread = unreadCount > 0;
 
     const recentActivity = db.prepare(
       'SELECT * FROM expenses WHERE client_id = ? ORDER BY created_at DESC LIMIT 5'
@@ -833,11 +857,14 @@ app.get('/api/coach/clients', requireCoach, (req, res) => {
     return {
       ...c,
       status,
-      budget: totalBudget,
-      spent:  totalSpent,
-      saved:  totalSaved,
-      streak: streaks.logged_streak,
+      budget:      totalBudget,
+      spent:       totalSpent,
+      saved:       totalSaved,
+      streak:      streaks.logged_streak,
+      on_track:    streaks.on_track_streak,
       unread,
+      unread_count: unreadCount,
+      last_active: c.last_active || null,
       cats: [
         { n:'Fixed',   s: spentBycat.fixed,   b: budgetByCat.fixed,   c:'#C97A2A' },
         { n:'Wants',   s: spentBycat.wants,   b: budgetByCat.wants,   c:'#C8B48A' },
@@ -854,7 +881,7 @@ app.get('/api/coach/clients', requireCoach, (req, res) => {
 });
 
 app.post('/api/coach/clients', requireCoach, (req, res) => {
-  const { name, username, password } = req.body;
+  const { name, username, password, income_amount, income_frequency } = req.body;
   if (!name || !username || !password) return res.status(400).json({ error: 'Missing fields' });
   const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username.toLowerCase());
   if (existing) return res.status(409).json({ error: 'Username already taken' });
@@ -862,7 +889,18 @@ app.post('/api/coach/clients', requireCoach, (req, res) => {
   const r = db.prepare(
     `INSERT INTO users (username, password_hash, name, role) VALUES (?,?,?,'client')`
   ).run(username.toLowerCase(), hash, name);
-  db.prepare('INSERT INTO budget (client_id) VALUES (?)').run(r.lastInsertRowid);
+
+  // Save income if provided
+  const amt  = parseFloat(income_amount) || 0;
+  const freq = income_frequency || 'weekly';
+  const weeklyEquiv = freq === 'monthly' ? (amt * 12) / 52
+                    : freq === 'biweekly' ? amt / 2
+                    : amt;
+  db.prepare(`
+    INSERT INTO budget (client_id, weekly_income, income_amount, income_frequency)
+    VALUES (?, ?, ?, ?)
+  `).run(r.lastInsertRowid, weeklyEquiv, amt, freq);
+
   db.prepare(`INSERT INTO savings_goals (client_id, name, goal_amount, current_amount, weekly_contrib, is_emergency) VALUES (?,'Emergency Fund',1000,0,25,1)`)
     .run(r.lastInsertRowid);
   res.json({ id: r.lastInsertRowid, ok: true });

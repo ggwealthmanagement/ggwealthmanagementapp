@@ -212,8 +212,14 @@
     <input class="m-input" type="text" id="new-username" placeholder="e.g. johnsmith">
     <span class="m-label">Password</span>
     <input class="m-input" type="password" id="new-password" placeholder="Set a login password">
-    <span class="m-label">Weekly Budget ($) <span style="color:var(--muted);font-size:9px">(optional)</span></span>
-    <input class="m-input" type="number" id="new-budget" placeholder="e.g. 1500">
+    <span class="m-label">Income Amount ($) <span style="color:var(--muted);font-size:9px">(optional)</span></span>
+    <input class="m-input" type="number" id="new-income-amount" placeholder="e.g. 3000">
+    <span class="m-label">Income Frequency</span>
+    <select class="m-select" id="new-income-freq">
+      <option value="monthly">Monthly</option>
+      <option value="biweekly">Bi-weekly (every 2 weeks)</option>
+      <option value="weekly" selected>Weekly</option>
+    </select>
     <div id="add-client-error" style="color:#E05555;font-size:11px;margin-top:10px;display:none"></div>
     <button class="m-save" id="add-save-btn" onclick="saveNewClient()">Add Client</button>
     <button class="m-close" onclick="closeAddModal()">✕ &nbsp; Close</button>
@@ -269,98 +275,8 @@ fetch('/api/me').then(function(r){
   r.json().then(function(u){ if(u.role!=='coach') window.location='/gg-home.html'; });
 });
 
-// ── Data ──
-var clients = [
-  { id:1, name:'Maria Gonzalez',  initials:'MG', color:'#C97A2A', status:'over',
-    budget:1400, spent:1520, saved:48,  debt:149, streak:7,  last:'2 hrs ago',   unread:true,
-    cats:[{n:'Fixed',s:390,b:600,c:'#C97A2A'},{n:'Wants',s:310,b:360,c:'#C8B48A'},{n:'Savings',s:48,b:200,c:'#1A5C2E'},{n:'Debt',s:149,b:240,c:'#8B1A1A'}],
-    activity:[
-      {icon:'🛍️',name:'Target Shopping',      cat:'Wants',  amt:87.50, time:'Today 2:14 PM'},
-      {icon:'☕', name:'Coffee & Snacks',      cat:'Wants',  amt:12.40, time:'Today 10:30 AM'},
-      {icon:'🏠', name:'Mortgage',             cat:'Fixed',  amt:950,   time:'Yesterday'},
-      {icon:'💳', name:'Credit Card Payment',  cat:'Debt',   amt:149,   time:'Yesterday'},
-    ],
-    notes:[
-      {from:'coach', time:'Mon 9:14 AM',   text:'Great job logging daily Maria! Watch the Wants spending this week.'},
-      {from:'client',time:'Mon 10:02 AM',  text:'Thank you! The daily log really helps.'},
-      {from:'coach', time:'Today 9:05 AM', text:'You are over budget on Wants this week. Lets talk about it on Friday!'},
-    ]
-  },
-  { id:2, name:'James Carter',    initials:'JC', color:'#4A90D9', status:'over',
-    budget:1800, spent:1950, saved:0,   debt:200, streak:3,  last:'5 hrs ago',   unread:false,
-    cats:[{n:'Fixed',s:980,b:1000,c:'#C97A2A'},{n:'Wants',s:620,b:500,c:'#C8B48A'},{n:'Savings',s:0,b:150,c:'#1A5C2E'},{n:'Debt',s:200,b:300,c:'#8B1A1A'}],
-    activity:[
-      {icon:'🍽️',name:'Restaurant',           cat:'Wants',  amt:145,   time:'Today 1:00 PM'},
-      {icon:'🎮', name:'Gaming Subscription',  cat:'Wants',  amt:59.99, time:'Yesterday'},
-      {icon:'⛽', name:'Gas Station',          cat:'Fixed',  amt:85,    time:'Yesterday'},
-    ],
-    notes:[
-      {from:'coach', time:'Tue 11:00 AM', text:'James, Wants spending is significantly over this week. Lets review your discretionary budget together.'},
-      {from:'client',time:'Tue 2:30 PM',  text:'I know, I overspent on dining. Will cut back.'},
-    ]
-  },
-  { id:3, name:'Sofia Ramirez',   initials:'SR', color:'#9B59B6', status:'risk',
-    budget:1200, spent:1050, saved:80,  debt:100, streak:5,  last:'1 day ago',   unread:true,
-    cats:[{n:'Fixed',s:600,b:700,c:'#C97A2A'},{n:'Wants',s:270,b:300,c:'#C8B48A'},{n:'Savings',s:80,b:100,c:'#1A5C2E'},{n:'Debt',s:100,b:150,c:'#8B1A1A'}],
-    activity:[
-      {icon:'🛒', name:'Grocery Store',        cat:'Fixed',  amt:120,   time:'Yesterday'},
-      {icon:'💡', name:'Electric Bill',         cat:'Fixed',  amt:95,    time:'2 days ago'},
-      {icon:'💰', name:'Savings Transfer',      cat:'Savings',amt:80,    time:'2 days ago'},
-    ],
-    notes:[
-      {from:'coach', time:'Wed 10:00 AM', text:'Sofia great progress! You are approaching your Wants limit — be mindful over the weekend.'},
-    ]
-  },
-  { id:4, name:'David Thompson',  initials:'DT', color:'#27AE60', status:'good',
-    budget:2200, spent:1450, saved:320, debt:400, streak:12, last:'3 hrs ago',   unread:false,
-    cats:[{n:'Fixed',s:800,b:1000,c:'#C97A2A'},{n:'Wants',s:330,b:600,c:'#C8B48A'},{n:'Savings',s:320,b:400,c:'#1A5C2E'},{n:'Debt',s:400,b:500,c:'#8B1A1A'}],
-    activity:[
-      {icon:'💰', name:'Emergency Fund',        cat:'Savings',amt:200,   time:'Today 8:00 AM'},
-      {icon:'📉', name:'Student Loan Payment',  cat:'Debt',   amt:400,   time:'Yesterday'},
-      {icon:'🏠', name:'Rent',                  cat:'Fixed',  amt:800,   time:'Mon'},
-    ],
-    notes:[
-      {from:'coach', time:'Mon 9:00 AM',  text:'David you are absolutely crushing it! 12-day streak and on track in every category. Keep this up!'},
-      {from:'client',time:'Mon 11:00 AM', text:'Feeling great! The snowball method is really working!'},
-    ]
-  },
-  { id:5, name:'Keisha Williams', initials:'KW', color:'#E91E8C', status:'good',
-    budget:1600, spent:980,  saved:150, debt:250, streak:9,  last:'6 hrs ago',   unread:false,
-    cats:[{n:'Fixed',s:500,b:700,c:'#C97A2A'},{n:'Wants',s:230,b:400,c:'#C8B48A'},{n:'Savings',s:150,b:200,c:'#1A5C2E'},{n:'Debt',s:250,b:300,c:'#8B1A1A'}],
-    activity:[
-      {icon:'📱', name:'Phone Bill',             cat:'Fixed',  amt:85,    time:'Today'},
-      {icon:'🛍️',name:'Clothing Store',         cat:'Wants',  amt:65,    time:'Yesterday'},
-      {icon:'💳', name:'Medical Bill Payment',   cat:'Debt',   amt:250,   time:'Mon'},
-    ],
-    notes:[
-      {from:'coach', time:'Tue 10:00 AM', text:'Keisha great week! Savings rate is exactly where we want it. Keep pushing toward that emergency fund goal.'},
-    ]
-  },
-  { id:6, name:'Robert Chen',     initials:'RC', color:'#2980B9', status:'good',
-    budget:2500, spent:1820, saved:400, debt:600, streak:6,  last:'1 day ago',   unread:false,
-    cats:[{n:'Fixed',s:1100,b:1200,c:'#C97A2A'},{n:'Wants',s:520,b:700,c:'#C8B48A'},{n:'Savings',s:400,b:500,c:'#1A5C2E'},{n:'Debt',s:600,b:700,c:'#8B1A1A'}],
-    activity:[
-      {icon:'🚗', name:'Car Payment',            cat:'Fixed',  amt:485,   time:'Yesterday'},
-      {icon:'💰', name:'Savings Deposit',         cat:'Savings',amt:400,   time:'Yesterday'},
-      {icon:'📉', name:'Car Loan Extra Payment',  cat:'Debt',   amt:150,   time:'Mon'},
-    ],
-    notes:[
-      {from:'coach', time:'Wed 9:00 AM', text:'Robert solid week. That extra debt payment is going to make a real difference. Well done!'},
-    ]
-  },
-  { id:7, name:'Angela Price',    initials:'AP', color:'#7D9B2A', status:'good',
-    budget:1100, spent:720,  saved:90,  debt:80,  streak:4,  last:'4 hrs ago',   unread:false,
-    cats:[{n:'Fixed',s:450,b:600,c:'#C97A2A'},{n:'Wants',s:200,b:300,c:'#C8B48A'},{n:'Savings',s:90,b:120,c:'#1A5C2E'},{n:'Debt',s:80,b:100,c:'#8B1A1A'}],
-    activity:[
-      {icon:'🛒', name:'Grocery Store',          cat:'Fixed',  amt:95,    time:'Today'},
-      {icon:'☕', name:'Coffee Shop',             cat:'Wants',  amt:8.50,  time:'Today'},
-      {icon:'💰', name:'Savings',                cat:'Savings',amt:90,    time:'Yesterday'},
-    ],
-    notes:[
-      {from:'coach', time:'Thu 8:00 AM', text:'Angela nice start to the week! Stay consistent and you will hit a new streak record by Sunday.'},
-    ]
-  },
-];
+// ── Data ── (populated from API — no hardcoded fake data)
+var clients = [];
 
 var colorPool = ['#C97A2A','#4A90D9','#9B59B6','#27AE60','#E91E8C','#2980B9','#7D9B2A','#E67E22','#16A085'];
 var deleteTargetId = null;
@@ -371,6 +287,22 @@ var statusCfg = {
   risk: { label:'At Risk',     bar:'#C9A84C', badge:'risk' },
   good: { label:'On Track',    bar:'#1A5C2E', badge:'good' },
 };
+
+function fmtLastActive(ts) {
+  if (!ts) return 'Never logged in';
+  var d = new Date(ts.replace(' ', 'T'));
+  if (isNaN(d)) return 'Unknown';
+  var now = new Date();
+  var diffMs = now - d;
+  var diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 2)   return 'Just now';
+  if (diffMin < 60)  return diffMin + ' min ago';
+  var diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24)   return diffHr + (diffHr === 1 ? ' hr ago' : ' hrs ago');
+  var diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7)   return diffDay + (diffDay === 1 ? ' day ago' : ' days ago');
+  return d.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+}
 
 function fmtMsgTime(ts) {
   if (!ts) return '';
@@ -404,8 +336,8 @@ function renderList() {
   var list = document.getElementById('client-list');
   list.innerHTML = '';
   clients.forEach(function(c, i) {
-    var sc  = statusCfg[c.status];
-    var pct = Math.min(100, Math.round((c.spent / c.budget) * 100));
+    var sc  = statusCfg[c.status] || statusCfg['good'];
+    var pct = c.budget > 0 ? Math.min(100, Math.round((c.spent / c.budget) * 100)) : 0;
     var card = document.createElement('div');
     card.className = 'client-card';
     card.style.animationDelay = (i * 0.05) + 's';
@@ -415,7 +347,7 @@ function renderList() {
     html += '<div class="c-avatar" style="background:' + c.color + '22;color:' + c.color + ';border:1px solid ' + c.color + '44">' + c.initials + '</div>';
     html += '<div class="c-info">';
     html += '<div class="c-name">' + c.name + '</div>';
-    html += '<div class="c-detail">' + pct + '% of budget · 🔥 ' + c.streak + ' day streak · ' + c.last + '</div>';
+    html += '<div class="c-detail">' + pct + '% of budget · 🔥 ' + c.streak + ' day streak · ' + fmtLastActive(c.last_active) + '</div>';
     html += '<div class="c-bar-track"><div class="c-bar-fill" style="width:' + pct + '%;background:' + sc.bar + '"></div></div>';
     html += '</div>';
     html += '<div class="c-right"><div class="s-badge ' + sc.badge + '">' + sc.label + '</div></div>';
@@ -429,9 +361,21 @@ function renderList() {
 function openDetail(id) {
   activeClientId = id;
   var c = clients.find(function(x){ return x.id === id; });
-  var sc  = statusCfg[c.status];
+  if (!c) return;
+  var sc  = statusCfg[c.status] || statusCfg['good'];
   var rem = Math.max(0, c.budget - c.spent);
-  c.unread = false;
+
+  // Mark all unread messages from this client as read (persisted to server)
+  if (c.unread) {
+    c.unread = false;
+    c.unread_count = 0;
+    fetch('/api/messages/read-all', {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ clientId: id })
+    });
+    updateNotifBar();
+  }
 
   document.getElementById('detail-name').textContent   = c.name;
   document.getElementById('detail-status').textContent = sc.label + ' · 🔥 ' + c.streak + '-day streak';
@@ -441,7 +385,7 @@ function openDetail(id) {
   // Hero
   html += '<div class="detail-hero">';
   html += '<div class="dh-avatar" style="width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;background:' + c.color + '22;color:' + c.color + ';border:1px solid ' + c.color + '44">' + c.initials + '</div>';
-  html += '<div><div class="dh-name">' + c.name + '</div><div class="dh-meta">Last active ' + c.last + ' · Budget $' + Math.round(c.budget).toLocaleString() + '/mo</div></div>';
+  html += '<div><div class="dh-name">' + c.name + '</div><div class="dh-meta">Last active ' + fmtLastActive(c.last_active) + ' · Budget $' + Math.round(c.budget).toLocaleString() + '/mo</div></div>';
   html += '</div>';
 
   // Stats
@@ -456,7 +400,7 @@ function openDetail(id) {
   html += '<div class="sec-title">Budget Categories</div>';
   html += '<div class="cat-bars">';
   c.cats.forEach(function(cat) {
-    var p = Math.min(100, Math.round((cat.s / cat.b) * 100));
+    var p = (cat.b > 0) ? Math.min(100, Math.round((cat.s / cat.b) * 100)) : 0;
     html += '<div class="cb-row">';
     html += '<div class="cb-name">' + cat.n + '</div>';
     html += '<div class="cb-track"><div class="cb-fill" style="width:' + p + '%;background:' + cat.c + '"></div></div>';
@@ -594,18 +538,20 @@ function openAddModal()  {
 function closeAddOut(e)  { if(e.target === document.getElementById('add-modal')) closeAddModal(); }
 function closeAddModal() {
   document.getElementById('add-modal').classList.remove('open');
-  document.getElementById('new-name').value     = '';
-  document.getElementById('new-username').value = '';
-  document.getElementById('new-password').value = '';
-  document.getElementById('new-budget').value   = '';
+  document.getElementById('new-name').value          = '';
+  document.getElementById('new-username').value      = '';
+  document.getElementById('new-password').value      = '';
+  document.getElementById('new-income-amount').value = '';
+  document.getElementById('new-income-freq').value   = 'monthly';
   document.getElementById('add-client-error').style.display = 'none';
 }
 function saveNewClient() {
-  var name     = document.getElementById('new-name').value.trim();
-  var username = document.getElementById('new-username').value.trim();
-  var password = document.getElementById('new-password').value;
-  var budget   = parseFloat(document.getElementById('new-budget').value) || 0;
-  var errEl    = document.getElementById('add-client-error');
+  var name          = document.getElementById('new-name').value.trim();
+  var username      = document.getElementById('new-username').value.trim();
+  var password      = document.getElementById('new-password').value;
+  var incomeAmount  = parseFloat(document.getElementById('new-income-amount').value) || 0;
+  var incomeFreq    = document.getElementById('new-income-freq').value;
+  var errEl         = document.getElementById('add-client-error');
   errEl.style.display = 'none';
 
   if (!name)     { errEl.textContent = 'Please enter the client\'s full name.'; errEl.style.display='block'; return; }
@@ -619,7 +565,7 @@ function saveNewClient() {
   fetch('/api/coach/clients', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ name: name, username: username, password: password, weekly_income: budget })
+    body: JSON.stringify({ name: name, username: username, password: password, income_amount: incomeAmount, income_frequency: incomeFreq })
   }).then(function(r) {
     btn.disabled = false; btn.textContent = 'Add Client';
     if (r.ok) {
@@ -766,19 +712,24 @@ function loadClients() {
         // Server sends: c.status, c.budget (weekly_income), c.spent (total), c.saved, c.streak, c.unread
         // c.cats → [{n,s,b,c}], c.activity → expense rows, c.notes → message rows
         var debtCat = c.cats && c.cats[3] ? c.cats[3].s : 0;
+        // Preserve read state if this client's detail is currently open
+        var wasOpen = activeClientId === c.id;
+        var prevUnread = wasOpen ? false : !!c.unread;
+
         return {
-          id:       c.id,
-          name:     c.name || 'Unknown',
-          initials: initials,
-          color:    color,
-          status:   c.status || 'good',
-          budget:   c.budget || 0,
-          spent:    c.spent  || 0,
-          saved:    c.saved  || 0,
-          debt:     debtCat,
-          streak:   c.streak || 0,
-          last:     'Recent',
-          unread:   !!c.unread,
+          id:           c.id,
+          name:         c.name || 'Unknown',
+          initials:     initials,
+          color:        color,
+          status:       c.status || 'good',
+          budget:       c.budget || 0,
+          spent:        c.spent  || 0,
+          saved:        c.saved  || 0,
+          debt:         debtCat,
+          streak:       c.streak || 0,
+          last_active:  c.last_active || null,
+          unread:       wasOpen ? false : !!c.unread,
+          unread_count: wasOpen ? 0 : (c.unread_count || 0),
           cats: c.cats || [
             {n:'Fixed',   s:0, b:0, c:'#C97A2A'},
             {n:'Wants',   s:0, b:0, c:'#C8B48A'},
@@ -834,7 +785,7 @@ function scrollToUnread() {
 loadClients();
 setInterval(function () {
   loadClients();
-  // If a detail view is open, also refresh its notes from the live API
+  // If detail view is open, also refresh notes from live API
   if (activeClientId) {
     fetch('/api/messages?clientId=' + activeClientId)
       .then(function(r){ return r.json(); })
@@ -845,9 +796,31 @@ setInterval(function () {
           return { from: m.sender_role==='coach'?'coach':'client', time: m.created_at||'', text: m.text||'' };
         });
         renderNotes(c);
+        // Refresh the detail stats panel too so spending numbers stay current
+        refreshDetailStats();
       });
   }
 }, 30000);
+
+function refreshDetailStats() {
+  var c = clients.find(function(x){ return x.id === activeClientId; });
+  if (!c) return;
+  // Update the 4 stat cards inline without re-rendering the whole detail
+  var rem = Math.max(0, c.budget - c.spent);
+  var statCards = document.querySelectorAll('.ds-card');
+  if (statCards.length >= 4) {
+    statCards[0].querySelector('.ds-value').textContent = '$' + Math.round(c.spent).toLocaleString();
+    statCards[0].querySelector('.ds-value').className   = 'ds-value ' + (c.spent > c.budget ? 'red' : 'white');
+    statCards[1].querySelector('.ds-value').textContent = '$' + Math.round(rem).toLocaleString();
+    statCards[1].querySelector('.ds-value').className   = 'ds-value ' + (rem <= 0 ? 'red' : 'green');
+    statCards[2].querySelector('.ds-value').textContent = '$' + Math.round(c.saved).toLocaleString();
+    statCards[3].querySelector('.ds-value').textContent = '$' + Math.round(c.debt).toLocaleString();
+  }
+  // Update status in top bar
+  var sc = statusCfg[c.status] || statusCfg['good'];
+  var statusEl = document.getElementById('detail-status');
+  if (statusEl) statusEl.textContent = sc.label + ' · 🔥 ' + c.streak + '-day streak';
+}
 
 // Sparkle
 var canvas = document.getElementById('sparkle-canvas');
