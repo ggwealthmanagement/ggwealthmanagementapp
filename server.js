@@ -711,13 +711,19 @@ app.get('/api/coach/clients', requireCoach, (req, res) => {
     const budget  = db.prepare('SELECT * FROM budget WHERE client_id = ?').get(c.id) || { weekly_income: 0, fixed_pct: 50, wants_pct: 25, savings_pct: 10, debt_pct: 15 };
     const streaks = db.prepare('SELECT * FROM streaks WHERE client_id = ?').get(c.id) || { logged_streak: 0, on_track_streak: 0 };
 
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-    const since = weekStart.toISOString().slice(0,10);
+    // Monthly projected income — same formula as client home page
+    const rawAmt = budget.income_amount || budget.weekly_income || 0;
+    const freq   = budget.income_frequency || 'weekly';
+    const totalBudget = freq === 'monthly'   ? rawAmt
+                      : freq === 'biweekly'  ? rawAmt * 2.17
+                      :                        rawAmt * 4.33; // weekly default
 
-    const expenses = db.prepare('SELECT * FROM expenses WHERE client_id = ? AND date(created_at) >= ?').all(c.id, since);
+    // Month-to-date expenses — same window as client home page
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+
+    const expenses = db.prepare('SELECT * FROM expenses WHERE client_id = ? AND date(created_at) >= ?').all(c.id, monthStart);
     const totalSpent = expenses.reduce((s,e) => s+e.amount, 0);
-    const totalBudget = budget.weekly_income;
 
     const spentBycat = { fixed: 0, wants: 0, savings: 0, debt: 0 };
     expenses.forEach(e => { if (spentBycat[e.category] != null) spentBycat[e.category] += e.amount; });
