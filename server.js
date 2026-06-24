@@ -15,6 +15,11 @@ db.exec('PRAGMA foreign_keys=ON');
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 db.exec(`
+  CREATE TABLE IF NOT EXISTS migrations (
+    name TEXT PRIMARY KEY,
+    ran_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS sessions (
     sid     TEXT PRIMARY KEY,
     data    TEXT NOT NULL,
@@ -172,16 +177,20 @@ try { db.exec("ALTER TABLE expenses ADD COLUMN debt_id INTEGER"); } catch(e) {}
 try { db.exec("ALTER TABLE fixed_expenses ADD COLUMN paid_month TEXT"); } catch(e) {}
 // One-time cleanup: remove expenses that were auto-posted when marking fixed bills as paid
 try {
-  db.exec(`
-    DELETE FROM expenses
-    WHERE category = 'fixed'
-    AND EXISTS (
-      SELECT 1 FROM fixed_expenses fe
-      WHERE fe.client_id = expenses.client_id
-      AND fe.name = expenses.description
-    )
-  `);
-  console.log('✅ Cleaned up auto-posted fixed expense entries');
+  const alreadyRan = db.prepare("SELECT 1 FROM migrations WHERE name='cleanup_fixed_autopost'").get();
+  if (!alreadyRan) {
+    db.exec(`
+      DELETE FROM expenses
+      WHERE category = 'fixed'
+      AND EXISTS (
+        SELECT 1 FROM fixed_expenses fe
+        WHERE fe.client_id = expenses.client_id
+        AND fe.name = expenses.description
+      )
+    `);
+    db.exec("INSERT INTO migrations (name) VALUES ('cleanup_fixed_autopost')");
+    console.log('✅ Cleaned up auto-posted fixed expense entries (one-time migration done)');
+  }
 } catch(e) { console.log('Migration note:', e.message); }
 try { db.exec(`
   CREATE TABLE IF NOT EXISTS paychecks (
@@ -475,6 +484,42 @@ app.post('/api/expenses', requireAuth, (req, res) => {
 
 app.delete('/api/expenses/:id', requireAuth, (req, res) => {
   const clientId = getClientId(req);
+  // Read before deleting so we can reverse any auto-updates
+  const exp = db.prepare('SELECT * FROM expenses WHERE id = ? AND client_id = ?').get(req.params.id, clientId);
+  if (!exp) return res.status(404).json({ error: 'Not found' });
+
+  // Reverse savings goal balance if this expense incremented it
+  if (exp.category === 'savings' && exp.goal_id) {
+    db.prepare('UPDATE savings_goals SET current_amount = MAX(0, current_amount - ?), complete = 0 WHERE id = ? AND client_id = ?')
+      .run(exp.amount, exp.goal_id, clientId);
+  } else if (exp.category === 'savings' && !exp.goal_id) {
+    // Was auto-matched — try to find the goal it would have gone to and reverse it
+    const goals = db.prepare('SELECT * FROM savings_goals WHERE client_id = ? ORDER BY is_emergency DESC, id ASC').all(clientId);
+    const desc  = (exp.description || '').toLowerCase();
+    const match = goals.find(g => desc.includes(g.name.toLowerCase()) || g.name.toLowerCase().includes(desc))
+                || goals.find(g => g.is_emergency) || goals[0];
+    if (match) {
+      db.prepare('UPDATE savings_goals SET current_amount = MAX(0, current_amount - ?), complete = 0 WHERE id = ?')
+        .run(exp.amount, match.id);
+    }
+  }
+
+  // Reverse debt paid balance if this expense incremented it
+  if (exp.category === 'debt' && exp.debt_id) {
+    db.prepare('UPDATE debts SET paid = MAX(0, paid - ?), paid_off = 0 WHERE id = ? AND client_id = ?')
+      .run(exp.amount, exp.debt_id, clientId);
+  } else if (exp.category === 'debt' && !exp.debt_id) {
+    // Was auto-matched — reverse the snowball target
+    const debts  = db.prepare('SELECT * FROM debts WHERE client_id = ? AND paid_off = 0').all(clientId);
+    const desc   = (exp.description || '').toLowerCase();
+    const match  = debts.find(d => desc.includes(d.name.toLowerCase()) || d.name.toLowerCase().includes(desc))
+                || debts.slice().sort((a,b) => (a.balance-a.paid)-(b.balance-b.paid))[0];
+    if (match) {
+      db.prepare('UPDATE debts SET paid = MAX(0, paid - ?), paid_off = 0 WHERE id = ?')
+        .run(exp.amount, match.id);
+    }
+  }
+
   db.prepare('DELETE FROM expenses WHERE id = ? AND client_id = ?').run(req.params.id, clientId);
   res.json({ ok: true });
 });
@@ -693,14 +738,32 @@ app.get('/api/streaks', requireAuth, (req, res) => {
 function updateStreak(clientId) {
   const today = new Date().toISOString().slice(0,10);
   let s = db.prepare('SELECT * FROM streaks WHERE client_id = ?').get(clientId);
+
+  // Determine if user is on-track: total spending this month ≤ monthly projected budget
+  const budget     = db.prepare('SELECT * FROM budget WHERE client_id = ?').get(clientId);
+  const monthStart = today.slice(0, 7) + '-01';
+  const monthSpent = (db.prepare(
+    'SELECT COALESCE(SUM(amount),0) as t FROM expenses WHERE client_id = ? AND date(created_at) >= ?'
+  ).get(clientId, monthStart) || {}).t || 0;
+  const rawAmt  = (budget && budget.income_amount) || (budget && budget.weekly_income) || 0;
+  const freq    = (budget && budget.income_frequency) || 'weekly';
+  const monthly = freq === 'monthly' ? rawAmt : freq === 'biweekly' ? rawAmt * 2.17 : rawAmt * 4.33;
+  const onTrack = monthly > 0 && monthSpent <= monthly;
+
   if (!s) {
-    db.prepare('INSERT INTO streaks (client_id, logged_streak, on_track_streak, last_log_date) VALUES (?,1,1,?)').run(clientId, today);
+    db.prepare('INSERT INTO streaks (client_id, logged_streak, on_track_streak, last_log_date) VALUES (?,1,?,?)').run(clientId, onTrack ? 1 : 0, today);
     return;
   }
-  if (s.last_log_date === today) return; // already logged today
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0,10);
-  const newStreak = s.last_log_date === yesterday ? s.logged_streak + 1 : 1;
-  db.prepare('UPDATE streaks SET logged_streak=?, last_log_date=? WHERE client_id=?').run(newStreak, today, clientId);
+  if (s.last_log_date === today) {
+    // Already logged today — just update on_track_streak status
+    db.prepare('UPDATE streaks SET on_track_streak=? WHERE client_id=?').run(onTrack ? s.on_track_streak : 0, clientId);
+    return;
+  }
+  const yesterday  = new Date(Date.now() - 86400000).toISOString().slice(0,10);
+  const newLogged  = s.last_log_date === yesterday ? s.logged_streak + 1 : 1;
+  const newOnTrack = onTrack ? (s.last_log_date === yesterday ? s.on_track_streak + 1 : 1) : 0;
+  db.prepare('UPDATE streaks SET logged_streak=?, on_track_streak=?, last_log_date=? WHERE client_id=?')
+    .run(newLogged, newOnTrack, today, clientId);
 }
 
 // ─── Coach: clients list ──────────────────────────────────────────────────────

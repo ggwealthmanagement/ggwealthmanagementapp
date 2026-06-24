@@ -241,27 +241,27 @@
     </div>
   </div>
 
-  <!-- Budget mini bars -->
+  <!-- Budget mini bars — populated dynamically -->
   <div class="budget-bars">
     <div class="bb-row">
       <span class="bb-name">Fixed</span>
-      <div class="bb-track"><div class="bb-fill" style="width:55%;background:#C97A2A"></div></div>
-      <div><div class="bb-spent">$825</div><div class="bb-total">of $1,500</div></div>
+      <div class="bb-track"><div class="bb-fill" id="bar-fixed" style="width:0%;background:#C97A2A"></div></div>
+      <div><div class="bb-spent" id="spent-fixed">$0</div><div class="bb-total" id="alloc-fixed">of $0</div></div>
     </div>
     <div class="bb-row">
       <span class="bb-name">Wants</span>
-      <div class="bb-track"><div class="bb-fill" style="width:48%;background:#C8B48A"></div></div>
-      <div><div class="bb-spent">$173</div><div class="bb-total">of $360</div></div>
+      <div class="bb-track"><div class="bb-fill" id="bar-wants" style="width:0%;background:#C8B48A"></div></div>
+      <div><div class="bb-spent" id="spent-wants">$0</div><div class="bb-total" id="alloc-wants">of $0</div></div>
     </div>
     <div class="bb-row">
       <span class="bb-name">Savings</span>
-      <div class="bb-track"><div class="bb-fill" style="width:32%;background:#1A5C2E"></div></div>
-      <div><div class="bb-spent">$64</div><div class="bb-total">of $200</div></div>
+      <div class="bb-track"><div class="bb-fill" id="bar-savings" style="width:0%;background:#1A5C2E"></div></div>
+      <div><div class="bb-spent" id="spent-savings">$0</div><div class="bb-total" id="alloc-savings">of $0</div></div>
     </div>
     <div class="bb-row">
       <span class="bb-name">Debt Payoff</span>
-      <div class="bb-track"><div class="bb-fill" style="width:62%;background:#8B1A1A"></div></div>
-      <div><div class="bb-spent">$149</div><div class="bb-total">of $240</div></div>
+      <div class="bb-track"><div class="bb-fill" id="bar-debt" style="width:0%;background:#8B1A1A"></div></div>
+      <div><div class="bb-spent" id="spent-debt">$0</div><div class="bb-total" id="alloc-debt">of $0</div></div>
     </div>
   </div>
 
@@ -361,6 +361,21 @@
   </div>
 </div>
 
+<!-- Edit Fixed Expense modal -->
+<div class="modal-overlay" id="edit-fixed-modal" onclick="closeEditFixedModal(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Edit Fixed Expense</div>
+    <input class="text-input" type="text" placeholder="Name" id="ef-name-input">
+    <div class="amount-wrap">
+      <span class="currency">$</span>
+      <input class="big-input" type="number" placeholder="0.00" id="ef-amount-input" inputmode="decimal">
+    </div>
+    <input class="text-input" type="text" placeholder="Due date (e.g. 1st, 15th)" id="ef-due-input">
+    <button class="save-btn" onclick="saveEditFixed()">Save Changes</button>
+  </div>
+</div>
+
 <!-- Bottom nav -->
 <nav class="bottom-nav">
   <div class="nav-item">
@@ -437,12 +452,48 @@ async function loadData() {
     time: new Date(e.created_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}),
   }));
   fixedItems = fixRes.map(f => ({
-    id: f.id, name: f.name, amount: f.amount, due: f.due_day, paid: !!f.paid
+    id: f.id, name: f.name, amount: f.amount, due: f.due_day, paid: !!f.is_paid
   }));
   renderEntries(currentTab === 'fixed' ? 'all' : currentTab);
   if (currentTab === 'fixed') renderFixed();
 }
 loadData();
+loadBudgetBars();
+
+// ── Budget bars (month-to-date, matches home page logic) ──
+async function loadBudgetBars() {
+  const [budget, allExp] = await Promise.all([
+    fetch('/api/budget').then(r=>r.json()).catch(()=>({})),
+    fetch('/api/expenses').then(r=>r.json()).catch(()=>[]),
+  ]);
+  const rawAmt = budget.income_amount || budget.weekly_income || 0;
+  const freq   = budget.income_frequency || 'weekly';
+  const monthly = freq === 'monthly' ? rawAmt : freq === 'biweekly' ? rawAmt * 2.17 : rawAmt * 4.33;
+
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+  const monthExp = Array.isArray(allExp) ? allExp.filter(e => (e.created_at||'').slice(0,10) >= monthStart) : [];
+
+  const spent = { fixed:0, wants:0, savings:0, debt:0 };
+  monthExp.forEach(e => { if (spent[e.category] != null) spent[e.category] += e.amount; });
+
+  const alloc = {
+    fixed:   (budget.fixed_pct   || 0) / 100 * monthly,
+    wants:   (budget.wants_pct   || 0) / 100 * monthly,
+    savings: (budget.savings_pct || 0) / 100 * monthly,
+    debt:    (budget.debt_pct    || 0) / 100 * monthly,
+  };
+
+  [['fixed','#C97A2A'],['wants','#C8B48A'],['savings','#1A5C2E'],['debt','#8B1A1A']].forEach(([cat, col]) => {
+    const pct = alloc[cat] > 0 ? Math.min(100, (spent[cat] / alloc[cat]) * 100) : 0;
+    const bar = document.getElementById('bar-'+cat);
+    if (bar) { bar.style.width = pct.toFixed(0)+'%'; if(pct>=100) bar.style.background='#E05555'; }
+    const sp = document.getElementById('spent-'+cat);
+    if (sp) sp.textContent = '$'+Math.round(spent[cat]).toLocaleString();
+    const al = document.getElementById('alloc-'+cat);
+    if (al) al.textContent = 'of $'+Math.round(alloc[cat]).toLocaleString();
+  });
+}
 
 // ── Render entries ──
 function renderEntries(filter) {
@@ -540,10 +591,11 @@ async function confirmDelete() {
   closeDelModal();
   if (type === 'expense') {
     await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
+    await Promise.all([loadData(), loadBudgetBars()]);
   } else {
     await fetch(`/api/fixed/${id}`, { method: 'DELETE' });
+    await loadData();
   }
-  await loadData();
 }
 
 // ── Render fixed ──
@@ -587,14 +639,31 @@ async function togglePaid(id) {
   await loadData();
 }
 
-async function editFixed(id) {
+let _editFixedId = null;
+function editFixed(id) {
   const f = fixedItems.find(x=>x.id===id);
   if (!f) return;
-  const name = prompt('Edit name:', f.name);
-  const amt  = prompt('Edit amount:', f.amount);
-  if (name === null && amt === null) return;
-  await fetch(`/api/fixed/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ name: name ?? f.name, amount: amt ? parseFloat(amt) : f.amount, due_day: f.due }) });
+  _editFixedId = id;
+  document.getElementById('ef-name-input').value   = f.name;
+  document.getElementById('ef-amount-input').value = f.amount;
+  document.getElementById('ef-due-input').value    = f.due || '';
+  document.getElementById('edit-fixed-modal').classList.add('open');
+}
+function closeEditFixedModal(e) {
+  if (!e || e.target === document.getElementById('edit-fixed-modal')) {
+    document.getElementById('edit-fixed-modal').classList.remove('open');
+    _editFixedId = null;
+  }
+}
+async function saveEditFixed() {
+  const f = fixedItems.find(x=>x.id===_editFixedId);
+  if (!f) return;
+  const name   = document.getElementById('ef-name-input').value.trim() || f.name;
+  const amt    = parseFloat(document.getElementById('ef-amount-input').value) || f.amount;
+  const due    = document.getElementById('ef-due-input').value.trim() || f.due;
+  await fetch(`/api/fixed/${_editFixedId}`, { method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ name, amount: amt, due_day: due }) });
+  closeEditFixedModal();
   await loadData();
 }
 
@@ -697,7 +766,7 @@ async function saveExpense() {
   await fetch('/api/expenses', { method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ description: desc, amount: amt, category: selCatVal,
                            goal_id: selGoalId || undefined, debt_id: selDebtId || undefined }) });
-  await loadData();
+  await Promise.all([loadData(), loadBudgetBars()]);
   if (currentTab==='fixed') { showTab('all',document.querySelector('.filter-tab')); }
   resetExpModal();
 }

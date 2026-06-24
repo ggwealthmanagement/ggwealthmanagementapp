@@ -475,7 +475,7 @@ async function saveEdit() {
     name:    document.getElementById('e-name').value.trim()||d.name,
     type:    document.getElementById('e-type').value.trim()||d.type,
     balance: parseFloat(document.getElementById('e-balance').value)||d.balance,
-    paid:    parseFloat(document.getElementById('e-paid').value)||0,
+    paid:    parseFloat(document.getElementById('e-paid').value)||d.paid,
     min_payment: parseFloat(document.getElementById('e-min').value)||d.min,
   };
   await fetch(`/api/debts/${editingId}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
@@ -521,6 +521,7 @@ function updateSummary() {
 
 function projectedDate(remaining, minPay) {
   if(remaining <= 0) return 'Paid Off!';
+  if(!minPay || minPay <= 0) return 'Set min payment';
   const months = Math.ceil(remaining / minPay);
   const d = new Date();
   d.setMonth(d.getMonth() + months);
