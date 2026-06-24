@@ -281,6 +281,22 @@ var clients = [];
 var colorPool = ['#C97A2A','#4A90D9','#9B59B6','#27AE60','#E91E8C','#2980B9','#7D9B2A','#E67E22','#16A085'];
 var deleteTargetId = null;
 var activeClientId = null;
+// Once a client's messages are seen or replied to, keep them dismissed for the whole session
+// even if the 30-second poll returns before the server catches up
+var readClients = new Set();
+
+function markClientRead(id) {
+  readClients.add(id);
+  var c = clients.find(function(x){ return x.id === id; });
+  if (c) { c.unread = false; c.unread_count = 0; }
+  fetch('/api/messages/read-all', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ clientId: id })
+  });
+  updateNotifBar();
+  renderList();
+}
 
 var statusCfg = {
   over: { label:'Over Budget', bar:'#8B1A1A', badge:'over' },
@@ -365,17 +381,9 @@ function openDetail(id) {
   var sc  = statusCfg[c.status] || statusCfg['good'];
   var rem = Math.max(0, c.budget - c.spent);
 
-  // Mark all unread messages from this client as read (persisted to server)
-  if (c.unread) {
-    c.unread = false;
-    c.unread_count = 0;
-    fetch('/api/messages/read-all', {
-      method: 'PUT',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ clientId: id })
-    });
-    updateNotifBar();
-  }
+  // Mark messages read — always, even if c.unread is already false locally,
+  // because the server may still have unread rows from before this session
+  markClientRead(id);
 
   document.getElementById('detail-name').textContent   = c.name;
   document.getElementById('detail-status').textContent = sc.label + ' · 🔥 ' + c.streak + '-day streak';
@@ -485,6 +493,8 @@ function sendNote() {
       return;
     }
     inp.value = '';
+    // Replying means we've read everything — dismiss the dot and notification bar
+    if (activeClientId) markClientRead(activeClientId);
     // Reload notes from server so we know it actually saved
     fetch('/api/messages?clientId=' + activeClientId)
       .then(function(r2){ return r2.json(); })
@@ -713,8 +723,8 @@ function loadClients() {
         // c.cats → [{n,s,b,c}], c.activity → expense rows, c.notes → message rows
         var debtCat = c.cats && c.cats[3] ? c.cats[3].s : 0;
         // Preserve read state if this client's detail is currently open
-        var wasOpen = activeClientId === c.id;
-        var prevUnread = wasOpen ? false : !!c.unread;
+        // Suppress the dot if this client was already seen or replied to this session
+        var alreadySeen = readClients.has(c.id);
 
         return {
           id:           c.id,
@@ -728,8 +738,8 @@ function loadClients() {
           debt:         debtCat,
           streak:       c.streak || 0,
           last_active:  c.last_active || null,
-          unread:       wasOpen ? false : !!c.unread,
-          unread_count: wasOpen ? 0 : (c.unread_count || 0),
+          unread:       alreadySeen ? false : !!c.unread,
+          unread_count: alreadySeen ? 0 : (c.unread_count || 0),
           cats: c.cats || [
             {n:'Fixed',   s:0, b:0, c:'#C97A2A'},
             {n:'Wants',   s:0, b:0, c:'#C8B48A'},
