@@ -408,11 +408,14 @@ function openDetail(id) {
   html += '<div class="sec-title">Budget Categories</div>';
   html += '<div class="cat-bars">';
   c.cats.forEach(function(cat) {
-    var p = (cat.b > 0) ? Math.min(100, Math.round((cat.s / cat.b) * 100)) : 0;
+    var p      = (cat.b > 0) ? Math.min(100, Math.round((cat.s / cat.b) * 100)) : 0;
+    var isOver = cat.b > 0 && cat.s > cat.b;
+    var barCol = isOver ? '#E05555' : cat.c;
+    var valCol = isOver ? '#E05555' : 'var(--white)';
     html += '<div class="cb-row">';
-    html += '<div class="cb-name">' + cat.n + '</div>';
-    html += '<div class="cb-track"><div class="cb-fill" style="width:' + p + '%;background:' + cat.c + '"></div></div>';
-    html += '<div class="cb-vals">$' + cat.s + '/$' + cat.b + '</div>';
+    html += '<div class="cb-name">' + cat.n + (isOver ? ' <span style="font-size:8px;font-weight:700;color:#E05555;letter-spacing:0.08em">OVER</span>' : '') + '</div>';
+    html += '<div class="cb-track"><div class="cb-fill" style="width:' + p + '%;background:' + barCol + (isOver ? ';box-shadow:0 0 6px rgba(224,85,85,0.5)' : '') + '"></div></div>';
+    html += '<div class="cb-vals" style="color:' + valCol + '">$' + Math.round(cat.s).toLocaleString() + '/$' + Math.round(cat.b).toLocaleString() + '</div>';
     html += '</div>';
   });
   html += '</div>';
