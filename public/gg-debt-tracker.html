@@ -184,6 +184,20 @@
   .confirm-no  { width:100%; background:transparent; border:1px solid rgba(255,255,255,0.08); border-radius:10px; color:var(--muted); cursor:pointer; font-family:'Inter',sans-serif; font-size:11px; font-weight:500; letter-spacing:0.18em; text-transform:uppercase; padding:14px; transition:border-color 0.2s, color 0.2s; }
   .confirm-no:hover { border-color:rgba(201,168,76,0.3); color:var(--gold); }
 
+  /* Payment history section */
+  .ph-section { margin-top:14px; border-top:1px solid rgba(255,255,255,0.06); padding-top:14px; }
+  .ph-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; cursor:pointer; }
+  .ph-title { font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:var(--muted); font-weight:500; }
+  .ph-toggle { font-size:10px; color:var(--gold); font-weight:600; }
+  .ph-list { display:none; flex-direction:column; gap:6px; }
+  .ph-list.open { display:flex; }
+  .ph-row { display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding:9px 12px; }
+  .ph-amount { font-size:13px; font-weight:600; color:#3DAA68; }
+  .ph-meta { font-size:10px; color:var(--muted); margin-top:1px; }
+  .ph-undo { background:transparent; border:1px solid rgba(139,26,26,0.3); border-radius:6px; color:#C05050; cursor:pointer; font-family:'Inter',sans-serif; font-size:9px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; padding:5px 9px; transition:background 0.15s; flex-shrink:0; }
+  .ph-undo:hover { background:rgba(139,26,26,0.15); }
+  .ph-empty { font-size:11px; color:var(--muted); text-align:center; padding:10px 0; }
+
   .debt-card { cursor:pointer; }
 
   /* ── Log Payment bottom sheet ── */
@@ -355,6 +369,17 @@
     <button class="save-btn" onclick="saveEdit()">Save Changes</button>
     <button class="delete-btn" onclick="deleteDebt()">🗑 &nbsp; Delete This Debt</button>
     <button class="close-btn" onclick="closeEditModal()">✕ &nbsp; Close</button>
+
+    <!-- Payment History -->
+    <div class="ph-section">
+      <div class="ph-header" onclick="togglePayHistory()">
+        <span class="ph-title">💳 &nbsp;Payment History</span>
+        <span class="ph-toggle" id="ph-toggle-btn">Show ▾</span>
+      </div>
+      <div class="ph-list" id="ph-list">
+        <div class="ph-empty" id="ph-empty">Loading...</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -437,6 +462,7 @@
 <script>
 
 let editingId = null;
+let phOpen = false;
 
 function openEditModal(id) {
   const d = debts.find(x=>x.id===id);
@@ -447,7 +473,62 @@ function openEditModal(id) {
   document.getElementById('e-balance').value = d.balance;
   document.getElementById('e-paid').value    = d.paid;
   document.getElementById('e-min').value     = d.min;
+  // Reset payment history panel
+  phOpen = false;
+  document.getElementById('ph-list').classList.remove('open');
+  document.getElementById('ph-toggle-btn').textContent = 'Show ▾';
+  document.getElementById('ph-empty').textContent = 'Loading...';
+  document.getElementById('ph-list').innerHTML = '<div class="ph-empty" id="ph-empty">Loading...</div>';
   document.getElementById('edit-modal').classList.add('open');
+}
+
+function togglePayHistory() {
+  phOpen = !phOpen;
+  const list = document.getElementById('ph-list');
+  const btn  = document.getElementById('ph-toggle-btn');
+  if (phOpen) {
+    list.classList.add('open');
+    btn.textContent = 'Hide ▴';
+    loadPayHistory();
+  } else {
+    list.classList.remove('open');
+    btn.textContent = 'Show ▾';
+  }
+}
+
+async function loadPayHistory() {
+  if (!editingId) return;
+  const list = document.getElementById('ph-list');
+  const rows = await fetch(`/api/debts/${editingId}/payments`).then(r=>r.json()).catch(()=>[]);
+  list.innerHTML = '';
+  if (!rows.length) {
+    list.innerHTML = '<div class="ph-empty">No payments recorded yet.</div>';
+    return;
+  }
+  rows.forEach(p => {
+    const date = new Date(p.paid_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const typeLabel = {min:'Min Payment',extra:'Extra Payment',full:'Full Payoff',custom:'Payment'}[p.payment_type] || 'Payment';
+    const row = document.createElement('div');
+    row.className = 'ph-row';
+    row.innerHTML = `
+      <div>
+        <div class="ph-amount">+$${parseFloat(p.amount).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+        <div class="ph-meta">${typeLabel} · ${date}</div>
+      </div>
+      <button class="ph-undo" onclick="undoPayment(${p.id})">↩ Undo</button>`;
+    list.appendChild(row);
+  });
+}
+
+async function undoPayment(paymentId) {
+  const res = await fetch(`/api/debt_payments/${paymentId}`, { method:'DELETE' });
+  if (res.ok) {
+    await loadDebts();
+    // Refresh the paid field in the edit form
+    const d = debts.find(x=>x.id===editingId);
+    if (d) document.getElementById('e-paid').value = d.paid;
+    await loadPayHistory();
+  }
 }
 function closeEditOut(e) { if(e.target===document.getElementById('edit-modal')) closeEditModal(); }
 function closeEditModal() { document.getElementById('edit-modal').classList.remove('open'); editingId=null; }
@@ -691,13 +772,12 @@ async function submitPayment() {
     hintEl.className   = 'ps-hint error';
     return;
   }
-  const payAmt  = psPayType === 'extra' ? (d.min||0) + raw : raw;
-  const newPaid = Math.min(d.balance, d.paid + payAmt);
-  const res     = await fetch(`/api/debts/${d.id}`, {
-    method:'PUT', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ paid: newPaid })
+  const payAmt = psPayType === 'extra' ? (d.min||0) + raw : raw;
+  const res    = await fetch(`/api/debts/${d.id}/payments`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ amount: payAmt, payment_type: psPayType })
   });
-  const result  = await res.json();
+  const result = await res.json();
   closePS();
   if (result.paid_off) {
     document.getElementById('cel-debt-name').textContent = d.name;

@@ -76,6 +76,15 @@ db.exec(`
     created_at TEXT    NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS debt_payments (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    debt_id      INTEGER NOT NULL REFERENCES debts(id) ON DELETE CASCADE,
+    client_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    amount       REAL    NOT NULL,
+    payment_type TEXT    NOT NULL DEFAULT 'custom',
+    paid_at      TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+
   CREATE TABLE IF NOT EXISTS savings_goals (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     client_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -637,6 +646,42 @@ app.put('/api/debts/:id', requireAuth, (req, res) => {
 app.delete('/api/debts/:id', requireAuth, (req, res) => {
   const clientId = getClientId(req);
   db.prepare('DELETE FROM debts WHERE id = ? AND client_id = ?').run(req.params.id, clientId);
+  res.json({ ok: true });
+});
+
+// Log a payment (records history, updates paid amount)
+app.post('/api/debts/:id/payments', requireAuth, (req, res) => {
+  const clientId = getClientId(req);
+  const existing = db.prepare('SELECT * FROM debts WHERE id = ? AND client_id = ?').get(req.params.id, clientId);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+  const amount = parseFloat(req.body.amount);
+  const payment_type = req.body.payment_type || 'custom';
+  if (!amount || amount <= 0) return res.status(400).json({ error: 'Invalid amount' });
+  const newPaid  = Math.min(existing.balance, existing.paid + amount);
+  const paidOff  = newPaid >= existing.balance ? 1 : 0;
+  db.prepare('UPDATE debts SET paid = ?, paid_off = ? WHERE id = ? AND client_id = ?').run(newPaid, paidOff, req.params.id, clientId);
+  db.prepare('INSERT INTO debt_payments (debt_id, client_id, amount, payment_type) VALUES (?,?,?,?)').run(req.params.id, clientId, amount, payment_type);
+  res.json({ ok: true, paid_off: !!paidOff, new_paid: newPaid });
+});
+
+// Get payment history for a debt
+app.get('/api/debts/:id/payments', requireAuth, (req, res) => {
+  const clientId = getClientId(req);
+  const rows = db.prepare('SELECT * FROM debt_payments WHERE debt_id = ? AND client_id = ? ORDER BY paid_at DESC').all(req.params.id, clientId);
+  res.json(rows);
+});
+
+// Reverse (delete) a single payment
+app.delete('/api/debt_payments/:id', requireAuth, (req, res) => {
+  const clientId = getClientId(req);
+  const payment = db.prepare('SELECT * FROM debt_payments WHERE id = ? AND client_id = ?').get(req.params.id, clientId);
+  if (!payment) return res.status(404).json({ error: 'Not found' });
+  const debt = db.prepare('SELECT * FROM debts WHERE id = ? AND client_id = ?').get(payment.debt_id, clientId);
+  if (!debt) return res.status(404).json({ error: 'Debt not found' });
+  const newPaid = Math.max(0, debt.paid - payment.amount);
+  const paidOff = newPaid >= debt.balance ? 1 : 0;
+  db.prepare('UPDATE debts SET paid = ?, paid_off = ? WHERE id = ?').run(newPaid, paidOff, payment.debt_id);
+  db.prepare('DELETE FROM debt_payments WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
 

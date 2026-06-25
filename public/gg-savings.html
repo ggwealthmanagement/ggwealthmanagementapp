@@ -81,6 +81,7 @@
   .em-item  { display:flex; flex-direction:column; gap:2px; }
   .em-label { font-size:8px; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); }
   .em-value { font-size:12px; font-weight:600; color:var(--white); }
+  .ef-btn-row { display:flex; gap:8px; }
   .add-btn {
     background:rgba(26,92,46,0.15); border:1px solid rgba(61,170,104,0.3);
     border-radius:8px; color:var(--savings-light); cursor:pointer;
@@ -89,6 +90,15 @@
     transition:background 0.2s;
   }
   .add-btn:hover { background:rgba(26,92,46,0.25); }
+  .ef-edit-btn {
+    background:rgba(201,168,76,0.07); border:1px solid rgba(201,168,76,0.25);
+    border-radius:8px; color:var(--gold); cursor:pointer;
+    font-family:'Inter',sans-serif; font-size:10px; font-weight:600;
+    letter-spacing:0.14em; text-transform:uppercase; padding:9px 12px;
+    transition:background 0.2s;
+  }
+  .ef-edit-btn:hover { background:rgba(201,168,76,0.14); }
+  .gc-edit-hint { font-size:11px; color:var(--muted); opacity:0.5; line-height:1; }
 
   /* Savings goal cards */
   .goal-list { display:flex; flex-direction:column; gap:10px; margin:0 20px; }
@@ -250,7 +260,10 @@
           <span class="em-value" id="ef-date">Nov 2025</span>
         </div>
       </div>
-      <button class="add-btn" onclick="openEFModal()">+ Add</button>
+      <div class="ef-btn-row">
+        <button class="add-btn" onclick="openEFModal()">+ Add</button>
+        <button class="ef-edit-btn" onclick="openEFSettingsModal()">✏ Edit</button>
+      </div>
     </div>
   </div>
 
@@ -271,6 +284,20 @@
     <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="ef-goal-input" placeholder="1000.00" inputmode="decimal"></div>
     <button class="save-btn" onclick="saveEF()">Save</button>
     <button class="close-btn" onclick="closeEFModal()">✕ &nbsp; Close</button>
+  </div>
+</div>
+
+<!-- Emergency Fund Settings modal -->
+<div class="modal-overlay" id="ef-settings-modal" onclick="closeEFSettingsOut(event)">
+  <div class="modal">
+    <div class="modal-title">Edit Emergency Fund</div>
+    <span class="input-label">Goal Amount</span>
+    <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="efs-goal" placeholder="1000.00" inputmode="decimal"></div>
+    <span class="input-label">Weekly Contribution</span>
+    <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="efs-weekly" placeholder="25.00" inputmode="decimal"></div>
+    <button class="save-btn" onclick="saveEFSettings()">Save Changes</button>
+    <button class="delete-btn" onclick="deleteEFGoal()">🗑 &nbsp; Delete Emergency Fund</button>
+    <button class="close-btn" onclick="closeEFSettingsModal()">✕ &nbsp; Close</button>
   </div>
 </div>
 
@@ -437,6 +464,9 @@ function renderGoals() {
       <div class="gc-bottom">
         <span class="gc-pct">${pct}% saved</span>
         <span class="gc-date">${isDone?'🎉 Complete':'Est. '+projDate(remain,g.weekly)}</span>
+      </div>
+      <div style="text-align:right;margin-top:8px">
+        <span class="gc-edit-hint">✏ tap to edit</span>
       </div>`;
     list.appendChild(card);
   });
@@ -464,6 +494,31 @@ async function saveEF() {
   }
   closeEFModal();
   document.getElementById('ef-add-amount').value='';
+}
+
+// EF Settings Modal
+function openEFSettingsModal() {
+  document.getElementById('efs-goal').value   = ef.goal;
+  document.getElementById('efs-weekly').value = ef.weekly;
+  document.getElementById('ef-settings-modal').classList.add('open');
+}
+function closeEFSettingsOut(e) { if(e.target===document.getElementById('ef-settings-modal')) closeEFSettingsModal(); }
+function closeEFSettingsModal() { document.getElementById('ef-settings-modal').classList.remove('open'); }
+async function saveEFSettings() {
+  const goal   = parseFloat(document.getElementById('efs-goal').value)||ef.goal;
+  const weekly = parseFloat(document.getElementById('efs-weekly').value)||ef.weekly;
+  const res = await fetch('/api/savings/'+(ef.id||'ef'), {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ current_amount: ef.current, goal_amount: goal, weekly_contrib: weekly })
+  });
+  if(res.ok) { ef.goal = goal; ef.weekly = weekly; updateEF(); updateSummary(); }
+  closeEFSettingsModal();
+}
+async function deleteEFGoal() {
+  if(!ef.id) { closeEFSettingsModal(); return; }
+  await fetch('/api/savings/'+ef.id, { method:'DELETE' });
+  closeEFSettingsModal();
+  await loadSavings();
 }
 
 // Goal Modal
