@@ -872,12 +872,19 @@ app.get('/api/coach/clients', requireCoach, (req, res) => {
     // Month-to-date expenses — same window as client home page
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+    const thisMonthYM = now.toISOString().slice(0, 7); // 'YYYY-MM'
+
+    // Fixed spending: read from paid bills directly (matches home page logic)
+    const paidBillsRow = db.prepare(
+      'SELECT COALESCE(SUM(amount),0) as total FROM fixed_bills WHERE client_id = ? AND paid_month = ?'
+    ).get(c.id, thisMonthYM);
+    const paidBillsTotal = paidBillsRow ? (paidBillsRow.total || 0) : 0;
 
     const expenses = db.prepare('SELECT * FROM expenses WHERE client_id = ? AND date(created_at) >= ?').all(c.id, monthStart);
-    const totalSpent = expenses.reduce((s,e) => s+e.amount, 0);
+    const totalSpent = expenses.reduce((s,e) => s+e.amount, 0) + paidBillsTotal;
 
-    const spentBycat = { fixed: 0, wants: 0, savings: 0, debt: 0 };
-    expenses.forEach(e => { if (spentBycat[e.category] != null) spentBycat[e.category] += e.amount; });
+    const spentBycat = { fixed: paidBillsTotal, wants: 0, savings: 0, debt: 0 };
+    expenses.forEach(e => { if (e.category !== 'fixed' && spentBycat[e.category] != null) spentBycat[e.category] += e.amount; });
 
     const budgetByCat = {
       fixed:   (budget.fixed_pct   / 100) * totalBudget,
