@@ -859,15 +859,25 @@ app.get('/api/coach/clients', requireCoach, (req, res) => {
   const clients = db.prepare("SELECT id, username, name, color, last_active FROM users WHERE role = 'client' ORDER BY name").all();
 
   const result = clients.map(c => {
+   try {
     const budget  = db.prepare('SELECT * FROM budget WHERE client_id = ?').get(c.id) || { weekly_income: 0, fixed_pct: 50, wants_pct: 25, savings_pct: 10, debt_pct: 15 };
     const streaks = db.prepare('SELECT * FROM streaks WHERE client_id = ?').get(c.id) || { logged_streak: 0, on_track_streak: 0 };
 
     // Monthly projected income — same formula as client home page
     const rawAmt = budget.income_amount || budget.weekly_income || 0;
     const freq   = budget.income_frequency || 'weekly';
-    const totalBudget = freq === 'monthly'   ? rawAmt
-                      : freq === 'biweekly'  ? rawAmt * 2.17
-                      :                        rawAmt * 4.33; // weekly default
+    const plannedBudget = freq === 'monthly'   ? rawAmt
+                        : freq === 'biweekly'  ? rawAmt * 2.17
+                        :                        rawAmt * 4.33; // weekly default
+
+    // Actual paychecks entered this month — use as budget base if present
+    const nowObj = new Date();
+    const thisMonthPfx = nowObj.toISOString().slice(0, 7);
+    const paycheckRow = db.prepare(
+      "SELECT COALESCE(SUM(amount),0) as total FROM paychecks WHERE client_id = ? AND strftime('%Y-%m', pay_date) = ?"
+    ).get(c.id, thisMonthPfx);
+    const actualIncome = paycheckRow ? (paycheckRow.total || 0) : 0;
+    const totalBudget  = actualIncome > 0 ? actualIncome : plannedBudget;
 
     // Month-to-date expenses — same window as client home page
     const now = new Date();
@@ -946,6 +956,18 @@ app.get('/api/coach/clients', requireCoach, (req, res) => {
       notes,
       topDebt,
     };
+   } catch(err) {
+    console.error('coach/clients error for client', c.id, err.message);
+    return {
+      ...c, status:'good', budget:0, spent:0, saved:0, streak:0, on_track:0,
+      unread:false, unread_count:0, last_active:null,
+      cats:[
+        {n:'Fixed',s:0,b:0,c:'#C97A2A'},{n:'Wants',s:0,b:0,c:'#C8B48A'},
+        {n:'Savings',s:0,b:0,c:'#1A5C2E'},{n:'Debt',s:0,b:0,c:'#8B1A1A'},
+      ],
+      activity:[], notes:[], topDebt:null,
+    };
+   }
   });
 
   res.json(result);

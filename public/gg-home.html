@@ -729,14 +729,15 @@ async function init() {
   monthExpenses.forEach(e => { if (e.category !== 'fixed' && spent[e.category] != null) spent[e.category] += e.amount; });
   const totalSpent = Object.values(spent).reduce((a,b)=>a+b, 0);
 
-  // Budget allocation — monthly amounts
+  // Budget allocation — use actual paychecks received if entered, else fall back to planned
+  const incomeBase = receivedTotal > 0 ? receivedTotal : monthlyProjected;
   const alloc = {
-    fixed:   (budget.fixed_pct   / 100) * monthlyProjected,
-    wants:   (budget.wants_pct   / 100) * monthlyProjected,
-    savings: (budget.savings_pct / 100) * monthlyProjected,
-    debt:    (budget.debt_pct    / 100) * monthlyProjected,
+    fixed:   (budget.fixed_pct   / 100) * incomeBase,
+    wants:   (budget.wants_pct   / 100) * incomeBase,
+    savings: (budget.savings_pct / 100) * incomeBase,
+    debt:    (budget.debt_pct    / 100) * incomeBase,
   };
-  const totalAlloc = monthlyProjected;
+  const totalAlloc = incomeBase;
 
   // Update ring SVG
   const RADII  = { debt:96, savings:76, wants:56, fixed:36 };
@@ -758,7 +759,7 @@ async function init() {
   remEl.textContent = (isOver ? '-$' : '$') + Math.abs(remaining).toLocaleString('en-US',{maximumFractionDigits:0}) + (isOver ? ' over' : ' left');
   remEl.classList.toggle('over', isOver);
   document.querySelector('.rc-amount').textContent = '$' + totalSpent.toLocaleString('en-US',{maximumFractionDigits:0}) + ' spent';
-  document.querySelector('.rc-label').textContent  = 'of $' + totalAlloc.toLocaleString('en-US',{maximumFractionDigits:0});
+  document.querySelector('.rc-label').textContent  = 'of $' + totalAlloc.toLocaleString('en-US',{maximumFractionDigits:0}) + (receivedTotal > 0 ? ' actual' : ' planned');
 
   // Category rows
   const catRows = document.querySelectorAll('.cat-row');
