@@ -720,8 +720,13 @@ async function init() {
   const monthExpenses = expRes.filter(e => (e.created_at || '').slice(0,10) >= monthStart);
 
   // Spending by category this month
-  const spent = { fixed:0, wants:0, savings:0, debt:0 };
-  monthExpenses.forEach(e => { if (spent[e.category] != null) spent[e.category] += e.amount; });
+  // Fixed: use paid fixed bills directly (is_paid already scoped to current month by server)
+  const paidBillsTotal = Array.isArray(fixedBills)
+    ? fixedBills.filter(f => f.is_paid).reduce((s, f) => s + (f.amount || 0), 0)
+    : 0;
+  const spent = { fixed: paidBillsTotal, wants:0, savings:0, debt:0 };
+  // Other categories from expense log (savings deposits + debt payments auto-logged there)
+  monthExpenses.forEach(e => { if (e.category !== 'fixed' && spent[e.category] != null) spent[e.category] += e.amount; });
   const totalSpent = Object.values(spent).reduce((a,b)=>a+b, 0);
 
   // Budget allocation — monthly amounts

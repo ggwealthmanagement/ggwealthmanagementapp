@@ -462,9 +462,10 @@ loadBudgetBars();
 
 // ── Budget bars (month-to-date, matches home page logic) ──
 async function loadBudgetBars() {
-  const [budget, allExp] = await Promise.all([
+  const [budget, allExp, fixedBills] = await Promise.all([
     fetch('/api/budget').then(r=>r.json()).catch(()=>({})),
     fetch('/api/expenses').then(r=>r.json()).catch(()=>[]),
+    fetch('/api/fixed').then(r=>r.json()).catch(()=>[]),
   ]);
   const rawAmt = budget.income_amount || budget.weekly_income || 0;
   const freq   = budget.income_frequency || 'weekly';
@@ -474,8 +475,12 @@ async function loadBudgetBars() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
   const monthExp = Array.isArray(allExp) ? allExp.filter(e => (e.created_at||'').slice(0,10) >= monthStart) : [];
 
-  const spent = { fixed:0, wants:0, savings:0, debt:0 };
-  monthExp.forEach(e => { if (spent[e.category] != null) spent[e.category] += e.amount; });
+  // Fixed: use paid bills directly (server scopes is_paid to current month)
+  const paidBillsTotal = Array.isArray(fixedBills)
+    ? fixedBills.filter(f => f.is_paid).reduce((s, f) => s + (f.amount || 0), 0)
+    : 0;
+  const spent = { fixed: paidBillsTotal, wants:0, savings:0, debt:0 };
+  monthExp.forEach(e => { if (e.category !== 'fixed' && spent[e.category] != null) spent[e.category] += e.amount; });
 
   const alloc = {
     fixed:   (budget.fixed_pct   || 0) / 100 * monthly,

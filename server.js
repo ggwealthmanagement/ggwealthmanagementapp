@@ -596,23 +596,6 @@ app.put('/api/fixed/:id', requireAuth, (req, res) => {
     req.params.id, clientId
   );
 
-  // Auto-log / un-log expense so home-page ring tracks fixed spending
-  if (paid != null) {
-    const billAmt  = amount  != null ? parseFloat(amount) : existing.amount;
-    const billName = name    ?? existing.name;
-    if (paid && !existing.paid) {
-      // Just marked as paid → create expense entry
-      db.prepare(`INSERT INTO expenses (client_id, description, amount, category) VALUES (?,?,?,'fixed')`)
-        .run(clientId, billName, billAmt);
-    } else if (!paid && existing.paid) {
-      // Just un-paid → remove the most-recent matching expense entry
-      db.prepare(`DELETE FROM expenses WHERE id = (
-        SELECT id FROM expenses WHERE client_id=? AND category='fixed' AND amount=? AND description=?
-        ORDER BY created_at DESC LIMIT 1
-      )`).run(clientId, billAmt, billName);
-    }
-  }
-
   // Streak update on pay
   if (paid) updateStreak(clientId);
 
