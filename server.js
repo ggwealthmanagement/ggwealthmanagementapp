@@ -531,6 +531,12 @@ app.delete('/api/expenses/:id', requireAuth, (req, res) => {
   if (exp.category === 'debt' && exp.debt_id) {
     db.prepare('UPDATE debts SET paid = MAX(0, paid - ?), paid_off = 0 WHERE id = ? AND client_id = ?')
       .run(exp.amount, exp.debt_id, clientId);
+    // Also remove matching debt_payments record so tracker stays in sync
+    const expDate = (exp.created_at || '').slice(0, 10);
+    db.prepare(`DELETE FROM debt_payments WHERE id = (
+      SELECT id FROM debt_payments WHERE debt_id=? AND client_id=? AND amount=?
+      AND date(paid_at) = ? ORDER BY paid_at DESC LIMIT 1
+    )`).run(exp.debt_id, clientId, exp.amount, expDate);
   } else if (exp.category === 'debt' && !exp.debt_id) {
     // Was auto-matched — reverse the snowball target
     const debts  = db.prepare('SELECT * FROM debts WHERE client_id = ? AND paid_off = 0').all(clientId);
@@ -590,7 +596,24 @@ app.put('/api/fixed/:id', requireAuth, (req, res) => {
     req.params.id, clientId
   );
 
-  // Streak update on pay (bills panel is separate from expense log)
+  // Auto-log / un-log expense so home-page ring tracks fixed spending
+  if (paid != null) {
+    const billAmt  = amount  != null ? parseFloat(amount) : existing.amount;
+    const billName = name    ?? existing.name;
+    if (paid && !existing.paid) {
+      // Just marked as paid → create expense entry
+      db.prepare(`INSERT INTO expenses (client_id, description, amount, category) VALUES (?,?,?,'fixed')`)
+        .run(clientId, billName, billAmt);
+    } else if (!paid && existing.paid) {
+      // Just un-paid → remove the most-recent matching expense entry
+      db.prepare(`DELETE FROM expenses WHERE id = (
+        SELECT id FROM expenses WHERE client_id=? AND category='fixed' AND amount=? AND description=?
+        ORDER BY created_at DESC LIMIT 1
+      )`).run(clientId, billAmt, billName);
+    }
+  }
+
+  // Streak update on pay
   if (paid) updateStreak(clientId);
 
   res.json({ ok: true });
@@ -661,6 +684,9 @@ app.post('/api/debts/:id/payments', requireAuth, (req, res) => {
   const paidOff  = newPaid >= existing.balance ? 1 : 0;
   db.prepare('UPDATE debts SET paid = ?, paid_off = ? WHERE id = ? AND client_id = ?').run(newPaid, paidOff, req.params.id, clientId);
   db.prepare('INSERT INTO debt_payments (debt_id, client_id, amount, payment_type) VALUES (?,?,?,?)').run(req.params.id, clientId, amount, payment_type);
+  // Auto-log as expense so home-page ring tracks debt spending
+  db.prepare(`INSERT INTO expenses (client_id, description, amount, category, debt_id) VALUES (?,?,?,'debt',?)`)
+    .run(clientId, existing.name + ' payment', amount, parseInt(req.params.id));
   res.json({ ok: true, paid_off: !!paidOff, new_paid: newPaid });
 });
 
@@ -682,6 +708,12 @@ app.delete('/api/debt_payments/:id', requireAuth, (req, res) => {
   const paidOff = newPaid >= debt.balance ? 1 : 0;
   db.prepare('UPDATE debts SET paid = ?, paid_off = ? WHERE id = ?').run(newPaid, paidOff, payment.debt_id);
   db.prepare('DELETE FROM debt_payments WHERE id = ?').run(req.params.id);
+  // Also remove the auto-created expense entry for this payment
+  const payDate = (payment.paid_at || '').slice(0, 10);
+  db.prepare(`DELETE FROM expenses WHERE id = (
+    SELECT id FROM expenses WHERE client_id=? AND debt_id=? AND category='debt' AND amount=?
+    AND date(created_at) = ? ORDER BY created_at DESC LIMIT 1
+  )`).run(clientId, payment.debt_id, payment.amount, payDate);
   res.json({ ok: true });
 });
 
@@ -722,6 +754,13 @@ app.put('/api/savings/:id', requireAuth, (req, res) => {
     complete,
     req.params.id, clientId
   );
+  // Auto-log deposit as expense so home-page ring tracks savings spending
+  if (newCurrent > existing.current_amount) {
+    const depositAmt = newCurrent - existing.current_amount;
+    const goalName   = name ?? existing.name;
+    db.prepare(`INSERT INTO expenses (client_id, description, amount, category, goal_id) VALUES (?,?,?,'savings',?)`)
+      .run(clientId, goalName + ' deposit', depositAmt, parseInt(req.params.id));
+  }
   res.json({ ok: true, complete: !!complete });
 });
 
