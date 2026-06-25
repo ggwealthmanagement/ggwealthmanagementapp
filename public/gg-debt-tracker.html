@@ -552,12 +552,21 @@ function cancelDelete() {
 async function saveEdit() {
   const d = debts.find(x=>x.id===editingId);
   if(!d) return;
+  // Use explicit empty-string checks so 0 is a valid input (not fallen back to old value)
+  const nameVal    = document.getElementById('e-name').value.trim();
+  const typeVal    = document.getElementById('e-type').value.trim();
+  const balVal     = document.getElementById('e-balance').value.trim();
+  const paidVal    = document.getElementById('e-paid').value.trim();
+  const minVal     = document.getElementById('e-min').value.trim();
+  const newBalance = balVal  !== '' ? (parseFloat(balVal)  || d.balance) : d.balance; // 0 balance not allowed
+  const newPaid    = paidVal !== '' ? (parseFloat(paidVal) ?? 0)         : d.paid;    // 0 paid IS valid
+  const newMin     = minVal  !== '' ? (parseFloat(minVal)  ?? 0)         : d.min;     // 0 min IS valid
   const body = {
-    name:    document.getElementById('e-name').value.trim()||d.name,
-    type:    document.getElementById('e-type').value.trim()||d.type,
-    balance: parseFloat(document.getElementById('e-balance').value)||d.balance,
-    paid:    parseFloat(document.getElementById('e-paid').value)||d.paid,
-    min_payment: parseFloat(document.getElementById('e-min').value)||d.min,
+    name:        nameVal || d.name,
+    type:        typeVal || d.type,
+    balance:     newBalance,
+    paid:        Math.min(newPaid, newBalance), // paid can never exceed balance
+    min_payment: newMin,
   };
   await fetch(`/api/debts/${editingId}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   closeEditModal();
@@ -618,7 +627,7 @@ function renderDebts() {
 
   debts.forEach((d,i) => {
     const remaining = Math.max(0, d.balance - d.paid);
-    const pct       = Math.min(100, Math.round((d.paid / d.balance)*100));
+    const pct       = d.balance > 0 ? Math.min(100, Math.round((d.paid / d.balance)*100)) : 0;
     const isPaidOff = d.paidOff || remaining === 0;
     const isTarget  = !isPaidOff && isFirst;
     if(isTarget) isFirst = false;
@@ -636,7 +645,7 @@ function renderDebts() {
 
       <div class="debt-top">
         <div style="display:flex;align-items:center;gap:0">
-          <div class="debt-icon ${isPaidOff?'paid-icon':'}'}">${gIcon(d.name,d.type)}</div>
+          <div class="debt-icon ${isPaidOff?'paid-icon':''}">${gIcon(d.name,d.type)}</div>
           <div class="debt-name-wrap" style="margin-left:12px">
             <div class="debt-name">${d.name}</div>
             <div class="debt-type">${d.type}</div>
@@ -762,7 +771,9 @@ function closePSAndDelete() {
   setTimeout(()=>document.getElementById('confirm-overlay').classList.add('show'), 120);
 }
 
+let _submitting = false;
 async function submitPayment() {
+  if (_submitting) return; // prevent double-tap
   const d = debts.find(x=>x.id===psDebtId);
   if(!d) return;
   const raw = parseFloat(document.getElementById('ps-amount').value);
@@ -772,18 +783,34 @@ async function submitPayment() {
     hintEl.className   = 'ps-hint error';
     return;
   }
-  const payAmt = psPayType === 'extra' ? (d.min||0) + raw : raw;
-  const res    = await fetch(`/api/debts/${d.id}/payments`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ amount: payAmt, payment_type: psPayType })
-  });
-  const result = await res.json();
-  closePS();
-  if (result.paid_off) {
-    document.getElementById('cel-debt-name').textContent = d.name;
-    document.getElementById('celebrate').classList.add('show');
+  _submitting = true;
+  const submitBtn = document.querySelector('#pay-sheet .save-btn');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving…'; }
+  try {
+    const payAmt = psPayType === 'extra' ? (d.min||0) + raw : raw;
+    const res    = await fetch(`/api/debts/${d.id}/payments`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ amount: payAmt, payment_type: psPayType })
+    });
+    if (!res.ok) throw new Error('Server error ' + res.status);
+    const result = await res.json();
+    closePS();
+    if (result.paid_off) {
+      document.getElementById('cel-debt-name').textContent = d.name;
+      document.getElementById('celebrate').classList.add('show');
+    }
+    await loadDebts();
+  } catch(err) {
+    hintEl.textContent = '⚠ Could not save payment. Try again.';
+    hintEl.className   = 'ps-hint error';
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Log Payment'; }
+  } finally {
+    _submitting = false;
+    if (submitBtn && !submitBtn.disabled) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Log Payment';
+    }
   }
-  await loadDebts();
 }
 
 function closeCelebrate() { document.getElementById('celebrate').classList.remove('show'); }

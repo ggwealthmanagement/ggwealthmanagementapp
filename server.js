@@ -727,9 +727,6 @@ app.put('/api/savings/:id', requireAuth, (req, res) => {
 
 app.delete('/api/savings/:id', requireAuth, (req, res) => {
   const clientId = getClientId(req);
-  // Protect the emergency fund from deletion
-  const goal = db.prepare('SELECT * FROM savings_goals WHERE id = ? AND client_id = ?').get(req.params.id, clientId);
-  if (goal && goal.is_emergency) return res.status(400).json({ error: 'Cannot delete emergency fund' });
   db.prepare('DELETE FROM savings_goals WHERE id = ? AND client_id = ?').run(req.params.id, clientId);
   res.json({ ok: true });
 });

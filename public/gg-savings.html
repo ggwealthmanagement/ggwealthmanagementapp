@@ -411,7 +411,7 @@ function projDate(remaining, weekly) {
 }
 
 function updateEF() {
-  const pct = Math.min(100, Math.round((ef.current/ef.goal)*100));
+  const pct = ef.goal > 0 ? Math.min(100, Math.round((ef.current/ef.goal)*100)) : 0;
   const remain = Math.max(0, ef.goal - ef.current);
   document.getElementById('ef-current').textContent   = '$'+ef.current.toLocaleString();
   document.getElementById('ef-goal-display').textContent = '$'+ef.goal.toLocaleString();
@@ -484,14 +484,20 @@ async function saveEF() {
   const add  = parseFloat(document.getElementById('ef-add-amount').value)||0;
   const goal = parseFloat(document.getElementById('ef-goal-input').value)||ef.goal;
   const newCurrent = Math.min(goal, ef.current+add);
-  const res = await fetch('/api/savings/'+(ef.id||'ef'), {
-    method:'PUT', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({current_amount: newCurrent, goal_amount: goal, weekly_contrib: ef.weekly})
-  });
-  if(res.ok) {
-    ef.current = newCurrent; ef.goal = goal;
-    updateEF(); updateSummary();
+  let res;
+  if (ef.id) {
+    res = await fetch('/api/savings/'+ef.id, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({current_amount: newCurrent, goal_amount: goal, weekly_contrib: ef.weekly})
+    });
+  } else {
+    // No EF exists yet — create it
+    res = await fetch('/api/savings', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name:'Emergency Fund', goal_amount: goal, current_amount: newCurrent, weekly_contrib: ef.weekly, is_emergency: 1})
+    });
   }
+  if(res.ok) { await loadSavings(); }
   closeEFModal();
   document.getElementById('ef-add-amount').value='';
 }
@@ -506,16 +512,26 @@ function closeEFSettingsOut(e) { if(e.target===document.getElementById('ef-setti
 function closeEFSettingsModal() { document.getElementById('ef-settings-modal').classList.remove('open'); }
 async function saveEFSettings() {
   const goal   = parseFloat(document.getElementById('efs-goal').value)||ef.goal;
-  const weekly = parseFloat(document.getElementById('efs-weekly').value)||ef.weekly;
-  const res = await fetch('/api/savings/'+(ef.id||'ef'), {
-    method:'PUT', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ current_amount: ef.current, goal_amount: goal, weekly_contrib: weekly })
-  });
-  if(res.ok) { ef.goal = goal; ef.weekly = weekly; updateEF(); updateSummary(); }
+  const weeklyInput = document.getElementById('efs-weekly').value.trim();
+  const weekly = weeklyInput !== '' ? (parseFloat(weeklyInput) ?? 0) : ef.weekly;
+  let res;
+  if (ef.id) {
+    res = await fetch('/api/savings/'+ef.id, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ current_amount: ef.current, goal_amount: goal, weekly_contrib: weekly })
+    });
+  } else {
+    res = await fetch('/api/savings', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name:'Emergency Fund', goal_amount: goal, current_amount: 0, weekly_contrib: weekly, is_emergency: 1})
+    });
+  }
+  if(res.ok) { await loadSavings(); }
   closeEFSettingsModal();
 }
 async function deleteEFGoal() {
   if(!ef.id) { closeEFSettingsModal(); return; }
+  if(!confirm('Delete the Emergency Fund? This cannot be undone.')) return;
   await fetch('/api/savings/'+ef.id, { method:'DELETE' });
   closeEFSettingsModal();
   await loadSavings();
