@@ -159,6 +159,7 @@
 
   .amount-wrap { background:#0A0A0A; border:1px solid var(--border); border-radius:10px; padding:10px 14px; display:flex; align-items:center; gap:8px; margin-bottom:10px; }
   .currency { font-size:22px; font-weight:700; color:var(--gold); }
+  .pct-suffix { font-size:22px; font-weight:700; color:var(--gold); }
   .big-input { background:transparent; border:none; outline:none; color:var(--white); font-family:'Inter',sans-serif; font-size:22px; font-weight:700; width:100%; }
   .big-input::-webkit-outer-spin-button,
   .big-input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
@@ -345,6 +346,8 @@
     <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" placeholder="0.00" id="d-paid" inputmode="decimal"></div>
     <span class="input-label">Minimum Monthly Payment</span>
     <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" placeholder="0.00" id="d-min" inputmode="decimal"></div>
+    <span class="input-label">Interest Rate (APR)</span>
+    <div class="amount-wrap"><input class="big-input" type="number" placeholder="0.0" id="d-rate" inputmode="decimal" step="0.1"><span class="pct-suffix">%</span></div>
     <button class="save-btn" onclick="saveDebt()">Add Debt</button>
     <button class="close-btn" onclick="closeModal()">✕ &nbsp; Close</button>
   </div>
@@ -366,6 +369,8 @@
     <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="e-paid" inputmode="decimal" placeholder="0.00"></div>
     <span class="input-label">Minimum Monthly Payment</span>
     <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="e-min" inputmode="decimal" placeholder="0.00"></div>
+    <span class="input-label">Interest Rate (APR)</span>
+    <div class="amount-wrap"><input class="big-input" type="number" id="e-rate" inputmode="decimal" placeholder="0.0" step="0.1"><span class="pct-suffix">%</span></div>
     <button class="save-btn" onclick="saveEdit()">Save Changes</button>
     <button class="delete-btn" onclick="deleteDebt()">🗑 &nbsp; Delete This Debt</button>
     <button class="close-btn" onclick="closeEditModal()">✕ &nbsp; Close</button>
@@ -473,6 +478,7 @@ function openEditModal(id) {
   document.getElementById('e-balance').value = d.balance;
   document.getElementById('e-paid').value    = d.paid;
   document.getElementById('e-min').value     = d.min;
+  document.getElementById('e-rate').value    = d.rate || '';
   // Reset payment history panel
   phOpen = false;
   document.getElementById('ph-list').classList.remove('open');
@@ -558,15 +564,18 @@ async function saveEdit() {
   const balVal     = document.getElementById('e-balance').value.trim();
   const paidVal    = document.getElementById('e-paid').value.trim();
   const minVal     = document.getElementById('e-min').value.trim();
+  const rateVal    = document.getElementById('e-rate').value.trim();
   const newBalance = balVal  !== '' ? (parseFloat(balVal)  || d.balance) : d.balance; // 0 balance not allowed
   const newPaid    = paidVal !== '' ? (parseFloat(paidVal) ?? 0)         : d.paid;    // 0 paid IS valid
   const newMin     = minVal  !== '' ? (parseFloat(minVal)  ?? 0)         : d.min;     // 0 min IS valid
+  const newRate    = rateVal !== '' ? (parseFloat(rateVal) ?? 0)         : (d.rate || 0);
   const body = {
-    name:        nameVal || d.name,
-    type:        typeVal || d.type,
-    balance:     newBalance,
-    paid:        Math.min(newPaid, newBalance), // paid can never exceed balance
-    min_payment: newMin,
+    name:          nameVal || d.name,
+    type:          typeVal || d.type,
+    balance:       newBalance,
+    paid:          Math.min(newPaid, newBalance), // paid can never exceed balance
+    min_payment:   newMin,
+    interest_rate: newRate,
   };
   await fetch(`/api/debts/${editingId}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   closeEditModal();
@@ -587,7 +596,7 @@ let debts = [];
 
 async function loadDebts() {
   const data = await fetch('/api/debts').then(r=>r.json());
-  debts = data.map(d => ({ id:d.id, name:d.name, type:d.type, balance:d.balance, paid:d.paid, min:d.min_payment, paidOff:!!d.paid_off }));
+  debts = data.map(d => ({ id:d.id, name:d.name, type:d.type, balance:d.balance, paid:d.paid, min:d.min_payment, rate:d.interest_rate||0, paidOff:!!d.paid_off }));
   renderDebts();
 }
 loadDebts();
@@ -673,6 +682,10 @@ function renderDebts() {
             <span class="dm-label">Min. Payment</span>
             <span class="dm-value">$${d.min}/mo</span>
           </div>
+          ${d.rate > 0 ? `<div class="dm-item">
+            <span class="dm-label">Interest (APR)</span>
+            <span class="dm-value">${d.rate.toFixed(1)}%</span>
+          </div>` : ''}
           <div class="dm-item">
             <span class="dm-label">Est. Payoff</span>
             <span class="dm-value">${projectedDate(remaining, d.min)}</span>
@@ -820,7 +833,7 @@ function openModal() { document.getElementById('modal').classList.add('open'); }
 function closeModalOut(e) { if(e.target===document.getElementById('modal')) closeModal(); }
 function closeModal() {
   document.getElementById('modal').classList.remove('open');
-  ['d-name','d-type','d-balance','d-paid','d-min'].forEach(id=>document.getElementById(id).value='');
+  ['d-name','d-type','d-balance','d-paid','d-min','d-rate'].forEach(id=>document.getElementById(id).value='');
 }
 async function saveDebt() {
   const name    = document.getElementById('d-name').value.trim();
@@ -828,9 +841,10 @@ async function saveDebt() {
   const balance = parseFloat(document.getElementById('d-balance').value)||0;
   const paid    = parseFloat(document.getElementById('d-paid').value)||0;
   const min     = parseFloat(document.getElementById('d-min').value)||0;
+  const rate    = parseFloat(document.getElementById('d-rate').value)||0;
   if(!name||balance<=0){ alert('Please enter a name and balance.'); return; }
   await fetch('/api/debts', { method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ name, type, balance, paid, min_payment: min }) });
+    body: JSON.stringify({ name, type, balance, paid, min_payment: min, interest_rate: rate }) });
   closeModal();
   await loadDebts();
 }

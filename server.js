@@ -201,6 +201,7 @@ try {
   add('users',    'last_active',   'TEXT');
   add('budget',   'income_amount', 'REAL');
   add('budget',   'income_frequency', "TEXT NOT NULL DEFAULT 'weekly'");
+  add('debts',    'interest_rate', 'REAL NOT NULL DEFAULT 0');
 })();
 
 // One-time cleanup: remove expenses that were auto-posted when marking fixed bills as paid
@@ -624,17 +625,17 @@ app.get('/api/debts', requireAuth, (req, res) => {
 
 app.post('/api/debts', requireAuth, (req, res) => {
   const clientId = getClientId(req);
-  const { name, type, balance, paid, min_payment } = req.body;
+  const { name, type, balance, paid, min_payment, interest_rate } = req.body;
   if (!name || !balance) return res.status(400).json({ error: 'Missing fields' });
   const r = db.prepare(
-    `INSERT INTO debts (client_id, name, type, balance, paid, min_payment) VALUES (?,?,?,?,?,?)`
-  ).run(clientId, name, type || 'Debt', parseFloat(balance), parseFloat(paid) || 0, parseFloat(min_payment) || 0);
+    `INSERT INTO debts (client_id, name, type, balance, paid, min_payment, interest_rate) VALUES (?,?,?,?,?,?,?)`
+  ).run(clientId, name, type || 'Debt', parseFloat(balance), parseFloat(paid) || 0, parseFloat(min_payment) || 0, parseFloat(interest_rate) || 0);
   res.json({ id: r.lastInsertRowid, ok: true });
 });
 
 app.put('/api/debts/:id', requireAuth, (req, res) => {
   const clientId = getClientId(req);
-  const { name, type, balance, paid, min_payment } = req.body;
+  const { name, type, balance, paid, min_payment, interest_rate } = req.body;
   const existing = db.prepare('SELECT * FROM debts WHERE id = ? AND client_id = ?').get(req.params.id, clientId);
   if (!existing) return res.status(404).json({ error: 'Not found' });
 
@@ -643,7 +644,7 @@ app.put('/api/debts/:id', requireAuth, (req, res) => {
   const paidOff    = newPaid >= newBalance ? 1 : 0;
 
   db.prepare(`
-    UPDATE debts SET name=?, type=?, balance=?, paid=?, min_payment=?, paid_off=?
+    UPDATE debts SET name=?, type=?, balance=?, paid=?, min_payment=?, interest_rate=?, paid_off=?
     WHERE id = ? AND client_id = ?
   `).run(
     name ?? existing.name,
@@ -651,6 +652,7 @@ app.put('/api/debts/:id', requireAuth, (req, res) => {
     newBalance,
     newPaid,
     min_payment != null ? parseFloat(min_payment) : existing.min_payment,
+    interest_rate != null ? parseFloat(interest_rate) : (existing.interest_rate || 0),
     paidOff,
     req.params.id, clientId
   );
