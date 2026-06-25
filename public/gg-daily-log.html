@@ -721,7 +721,13 @@ function selCat(btn) {
 }
 function renderGoalPills() {
   const list = document.getElementById('goal-pill-list');
-  const active = goalsList.filter(g => !g.complete);
+  const seen = new Set();
+  const active = goalsList.filter(g => {
+    if (g.complete) return false;
+    if (seen.has(g.name)) return false;
+    seen.add(g.name);
+    return true;
+  });
   list.innerHTML = active.length ? active.map(g => {
     const pct = g.goal_amount > 0 ? Math.min(100,(g.current_amount/g.goal_amount)*100).toFixed(0) : 0;
     const rem = Math.max(0, g.goal_amount - g.current_amount);

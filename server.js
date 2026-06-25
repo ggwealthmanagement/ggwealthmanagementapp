@@ -184,6 +184,14 @@ try { db.exec("ALTER TABLE budget ADD COLUMN income_frequency TEXT DEFAULT 'week
 try { db.exec("ALTER TABLE expenses ADD COLUMN goal_id INTEGER"); } catch(e) {}
 try { db.exec("ALTER TABLE expenses ADD COLUMN debt_id INTEGER"); } catch(e) {}
 try { db.exec("ALTER TABLE fixed_expenses ADD COLUMN paid_month TEXT"); } catch(e) {}
+// Remove duplicate savings goals — keep the lowest id per (client_id, name)
+try {
+  db.exec(`
+    DELETE FROM savings_goals WHERE id NOT IN (
+      SELECT MIN(id) FROM savings_goals GROUP BY client_id, name
+    )
+  `);
+} catch(e) {}
 // ─── Column migrations (idempotent ALTER TABLE) ───────────────────────────────
 (function runColumnMigrations() {
   const add = (table, col, def) => {
