@@ -111,10 +111,10 @@
     display: flex; flex-direction: column;
     align-items: center; justify-content: center; text-align: center;
   }
-  .rc-amount { font-size: 26px; font-weight: 700; color: #E2C472; letter-spacing: -0.03em; line-height: 1; text-shadow: 0 0 18px rgba(226,196,114,0.35); }
-  .rc-label  { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(226,196,114,0.5); margin-top: 3px; }
-  .rc-remain { font-size: 12px; font-weight: 600; color: #F0EDE8; margin-top: 5px; }
-  .rc-remain.over { color: var(--over); }
+  .rc-remain { font-size: 28px; font-weight: 700; color: #F0EDE8; letter-spacing: -0.03em; line-height: 1; text-shadow: 0 0 18px rgba(240,237,232,0.25); }
+  .rc-remain.over { color: #E05252; text-shadow: 0 0 18px rgba(224,82,82,0.4); }
+  .rc-amount { font-size: 12px; font-weight: 500; color: rgba(226,196,114,0.5); margin-top: 5px; }
+  .rc-label  { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(226,196,114,0.32); margin-top: 2px; }
 
   /* ── Category rows ── */
   .categories { display: flex; flex-direction: column; gap: 12px; }
@@ -374,9 +374,9 @@
       </svg>
 
       <div class="ring-center">
-        <div class="rc-amount">$776</div>
-        <div class="rc-label">of $1,400</div>
         <div class="rc-remain">$624 left</div>
+        <div class="rc-amount">$776 spent</div>
+        <div class="rc-label">of $1,400</div>
       </div>
     </div>
 
@@ -752,12 +752,13 @@ async function init() {
   });
 
   // Ring center
-  const remaining = Math.max(0, totalAlloc - totalSpent);
-  document.querySelector('.rc-amount').textContent = '$' + totalSpent.toLocaleString('en-US',{maximumFractionDigits:0});
-  document.querySelector('.rc-label').textContent  = 'of $' + totalAlloc.toLocaleString('en-US',{maximumFractionDigits:0});
+  const remaining = totalAlloc - totalSpent;
+  const isOver    = remaining < 0;
   const remEl = document.querySelector('.rc-remain');
-  remEl.textContent = '$' + remaining.toLocaleString('en-US',{maximumFractionDigits:0}) + (remaining < 0 ? ' over!' : ' left');
-  remEl.classList.toggle('over', remaining < 0);
+  remEl.textContent = (isOver ? '-$' : '$') + Math.abs(remaining).toLocaleString('en-US',{maximumFractionDigits:0}) + (isOver ? ' over' : ' left');
+  remEl.classList.toggle('over', isOver);
+  document.querySelector('.rc-amount').textContent = '$' + totalSpent.toLocaleString('en-US',{maximumFractionDigits:0}) + ' spent';
+  document.querySelector('.rc-label').textContent  = 'of $' + totalAlloc.toLocaleString('en-US',{maximumFractionDigits:0});
 
   // Category rows
   const catRows = document.querySelectorAll('.cat-row');
