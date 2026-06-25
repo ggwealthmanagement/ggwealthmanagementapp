@@ -213,11 +213,11 @@
   <!-- Trend row -->
   <div class="trend-row">
     <div class="trend-card">
-      <div class="tc-label">This Week</div>
+      <div class="tc-label">Per Month</div>
       <div class="tc-value green" id="week-saved">$0</div>
     </div>
     <div class="trend-card">
-      <div class="tc-label">This Month</div>
+      <div class="tc-label">Annual Rate</div>
       <div class="tc-value green" id="month-saved">$0</div>
     </div>
     <div class="trend-card">
@@ -252,7 +252,7 @@
     <div class="ef-bottom">
       <div class="ef-meta">
         <div class="em-item">
-          <span class="em-label">Weekly Add</span>
+          <span class="em-label">Monthly Add</span>
           <span class="em-value" id="ef-weekly">$64</span>
         </div>
         <div class="em-item">
@@ -293,8 +293,8 @@
     <div class="modal-title">Edit Emergency Fund</div>
     <span class="input-label">Goal Amount</span>
     <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="efs-goal" placeholder="1000.00" inputmode="decimal"></div>
-    <span class="input-label">Weekly Contribution</span>
-    <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="efs-weekly" placeholder="25.00" inputmode="decimal"></div>
+    <span class="input-label">Monthly Contribution</span>
+    <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="efs-weekly" placeholder="100.00" inputmode="decimal"></div>
     <button class="save-btn" onclick="saveEFSettings()">Save Changes</button>
     <button class="delete-btn" onclick="deleteEFGoal()">🗑 &nbsp; Delete Emergency Fund</button>
     <button class="close-btn" onclick="closeEFSettingsModal()">✕ &nbsp; Close</button>
@@ -311,7 +311,7 @@
     <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="g-goal" placeholder="0.00" inputmode="decimal"></div>
     <span class="input-label">Amount Already Saved</span>
     <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="g-saved" placeholder="0.00" inputmode="decimal"></div>
-    <span class="input-label">Weekly Contribution</span>
+    <span class="input-label">Monthly Contribution</span>
     <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="g-weekly" placeholder="0.00" inputmode="decimal"></div>
     <button class="save-btn" onclick="saveGoal()">Add Goal</button>
     <button class="close-btn" onclick="closeGoalModal()">✕ &nbsp; Close</button>
@@ -328,7 +328,7 @@
     <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="eg-goal" placeholder="0.00" inputmode="decimal"></div>
     <span class="input-label">Amount Saved So Far</span>
     <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="eg-saved" placeholder="0.00" inputmode="decimal"></div>
-    <span class="input-label">Weekly Contribution</span>
+    <span class="input-label">Monthly Contribution</span>
     <div class="amount-wrap"><span class="currency">$</span><input class="big-input" type="number" id="eg-weekly" placeholder="0.00" inputmode="decimal"></div>
     <button class="save-btn" onclick="saveEditGoal()">Save Changes</button>
     <button class="delete-btn" onclick="deleteGoal()">🗑 &nbsp; Delete This Goal</button>
@@ -401,12 +401,12 @@ function gIcon(name) {
   return GOAL_ICONS.default;
 }
 
-function projDate(remaining, weekly) {
+function projDate(remaining, monthly) {
   if(remaining<=0) return 'Complete!';
-  if(!weekly||weekly<=0) return 'Set weekly amt';
-  const weeks = Math.ceil(remaining/weekly);
+  if(!monthly||monthly<=0) return 'Set monthly amt';
+  const months = Math.ceil(remaining/monthly);
   const d = new Date();
-  d.setDate(d.getDate() + weeks*7);
+  d.setMonth(d.getMonth() + months);
   return d.toLocaleDateString('en-US',{month:'short',year:'numeric'});
 }
 
@@ -427,8 +427,9 @@ function updateSummary() {
   const met        = goals.filter(g=>g.complete||g.saved>=g.goal).length;
   document.getElementById('hero-amount').textContent  = '$'+totalSaved.toLocaleString();
   document.getElementById('goal-count').textContent   = goals.length;
-  document.getElementById('week-saved').textContent   = '$'+(ef.weekly + goals.reduce((s,g)=>s+g.weekly,0));
-  document.getElementById('month-saved').textContent  = '$'+((ef.weekly + goals.reduce((s,g)=>s+g.weekly,0))*4);
+  const totalMonthly = ef.weekly + goals.reduce((s,g)=>s+g.weekly,0);
+  document.getElementById('week-saved').textContent   = '$'+totalMonthly.toLocaleString();
+  document.getElementById('month-saved').textContent  = '$'+(totalMonthly*12).toLocaleString();
   document.getElementById('goals-met').textContent    = met;
 }
 
@@ -452,7 +453,7 @@ function renderGoals() {
           <div class="gc-icon">${g.icon||gIcon(g.name)}</div>
           <div>
             <div class="gc-name">${g.name}</div>
-            <div class="gc-desc">$${g.weekly}/week</div>
+            <div class="gc-desc">$${g.weekly}/mo</div>
           </div>
         </div>
         <div class="gc-right">
