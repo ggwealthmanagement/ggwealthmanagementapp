@@ -876,7 +876,7 @@ app.get('/api/coach/clients', requireCoach, (req, res) => {
 
     // Fixed spending: read from paid bills directly (matches home page logic)
     const paidBillsRow = db.prepare(
-      'SELECT COALESCE(SUM(amount),0) as total FROM fixed_bills WHERE client_id = ? AND paid_month = ?'
+      'SELECT COALESCE(SUM(amount),0) as total FROM fixed_expenses WHERE client_id = ? AND paid_month = ?'
     ).get(c.id, thisMonthYM);
     const paidBillsTotal = paidBillsRow ? (paidBillsRow.total || 0) : 0;
 
