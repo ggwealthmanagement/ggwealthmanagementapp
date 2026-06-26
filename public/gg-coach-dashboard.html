@@ -450,6 +450,7 @@ function openDetail(id) {
   html += '</div>';
   html += '<button class="export-btn" onclick="alert(\'PDF report for ' + c.name + ' - coming soon!\')">📄 &nbsp; Export PDF Report</button>';
   html += '<button class="export-btn" style="margin-top:8px" onclick="openResetModal(' + c.id + ',\'' + c.name.replace(/'/g,"\\'") + '\')">🔑 &nbsp; Reset Client Password</button>';
+  html += '<button class="export-btn" style="margin-top:8px;border-color:rgba(224,85,85,0.3);color:#E05555" onclick="confirmResetMonth(' + c.id + ',\'' + c.name.split(' ')[0].replace(/'/g,"\\'") + '\')">🔄 &nbsp; Reset This Month\'s Data</button>';
   html += '<button class="delete-btn" onclick="confirmDelete(' + c.id + ')">🗑 &nbsp; Remove This Client</button>';
 
   document.getElementById('detail-body').innerHTML = html;
@@ -712,6 +713,18 @@ function doDelete() {
 function cancelDelete() {
   document.getElementById('confirm-overlay').classList.remove('show');
   deleteTargetId = null;
+}
+
+// Reset this month's data for a client
+function confirmResetMonth(id, firstName) {
+  if (!confirm('Reset ALL of ' + firstName + '\'s spending, payments, and check-ins for this month? This clears test data so you can start fresh. This cannot be undone.')) return;
+  fetch('/api/coach/clients/' + id + '/reset-month', { method: 'DELETE' })
+    .then(function(r) { return r.json(); })
+    .then(function() {
+      showToast('✓ ' + firstName + '\'s month data cleared');
+      loadClients();
+    })
+    .catch(function() { alert('Network error — please try again.'); });
 }
 
 // Load real clients from API

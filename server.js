@@ -1014,6 +1014,23 @@ app.delete('/api/coach/clients/:id', requireCoach, (req, res) => {
   res.json({ ok: true });
 });
 
+// Reset a client's expenses + debt payments for the current month (coach only)
+app.delete('/api/coach/clients/:id/reset-month', requireCoach, (req, res) => {
+  const clientId = parseInt(req.params.id);
+  const thisMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+  // Delete expenses logged this month
+  db.prepare(`DELETE FROM expenses WHERE client_id = ? AND strftime('%Y-%m', created_at) = ?`).run(clientId, thisMonth);
+  // Delete debt payment history logged this month
+  db.prepare(`DELETE FROM debt_payments WHERE client_id = ? AND strftime('%Y-%m', paid_at) = ?`).run(clientId, thisMonth);
+  // Reset debt paid amounts to zero (start fresh)
+  db.prepare(`UPDATE debts SET paid = 0, paid_off = 0 WHERE client_id = ?`).run(clientId);
+  // Reset fixed bills to unpaid
+  db.prepare(`UPDATE fixed_expenses SET is_paid = 0, paid_month = NULL WHERE client_id = ?`).run(clientId);
+  // Reset savings goal current amounts to zero
+  db.prepare(`UPDATE savings_goals SET current_amount = 0 WHERE client_id = ?`).run(clientId);
+  res.json({ ok: true, message: 'Client month data reset' });
+});
+
 // Reset a client's password (coach only)
 app.put('/api/coach/clients/:id/password', requireCoach, (req, res) => {
   const { password } = req.body;
