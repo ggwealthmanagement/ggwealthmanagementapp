@@ -782,14 +782,18 @@ async function init() {
     const s = spent[def.key], b = alloc[def.key];
     const pct = b > 0 ? Math.min(100, (s/b)*100) : 0;
     const left = b - s;
+    const isRowOver = left < -0.5;          // truly over budget
+    const isRowDone = !isRowOver && b > 0 && Math.abs(left) < 0.5; // at exactly budget (float-safe)
     row.querySelector('.cat-name').textContent = def.name;
     row.querySelector('.cat-amts').innerHTML = `<span class="sp">$${s.toFixed(0)}</span> / $${b.toFixed(0)}`;
     const fill = row.querySelector('.bar-fill');
     fill.style.width = pct + '%';
-    fill.classList.toggle('over', pct >= 100);
+    fill.classList.toggle('over', isRowOver);
     const st = row.querySelector('.cat-status');
-    st.textContent = left >= 0 ? '$'+left.toFixed(0)+' left' : '$'+Math.abs(left).toFixed(0)+' over!';
-    st.className = 'cat-status ' + (pct >= 100 ? 'over' : pct >= 80 ? 'warn' : 'ok');
+    st.textContent = isRowOver ? '$'+Math.round(Math.abs(left))+' over!'
+                   : isRowDone ? '✓ Done'
+                   : '$'+Math.round(left)+' left';
+    st.className = 'cat-status ' + (isRowOver ? 'over' : isRowDone ? 'ok' : pct >= 80 ? 'warn' : 'ok');
   });
 
   // Monthly Bills card
