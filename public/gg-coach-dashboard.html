@@ -365,6 +365,13 @@ function renderList() {
     html += '<div class="c-name">' + c.name + '</div>';
     html += '<div class="c-detail">' + pct + '% of budget · 🔥 ' + c.streak + ' day streak · ' + fmtLastActive(c.last_active) + '</div>';
     html += '<div class="c-bar-track"><div class="c-bar-fill" style="width:' + pct + '%;background:' + sc.bar + '"></div></div>';
+    var p = c.pcts || {fixed:0,wants:0,savings:0,debt:0};
+    html += '<div style="display:flex;gap:1px;height:3px;border-radius:2px;overflow:hidden;margin-top:3px" title="Budget split: Fixed ' + p.fixed + '% · Wants ' + p.wants + '% · Savings ' + p.savings + '% · Debt ' + p.debt + '%">';
+    html += '<div style="width:' + p.fixed + '%;background:#C97A2A;flex-shrink:0"></div>';
+    html += '<div style="width:' + p.wants + '%;background:#C8B48A;flex-shrink:0"></div>';
+    html += '<div style="width:' + p.savings + '%;background:#2D7A4A;flex-shrink:0"></div>';
+    html += '<div style="width:' + p.debt + '%;background:#8B1A1A;flex-shrink:0"></div>';
+    html += '</div>';
     html += '</div>';
     html += '<div class="c-right"><div class="s-badge ' + sc.badge + '">' + sc.label + '</div></div>';
     html += '<div class="chevron">›</div>';
@@ -418,6 +425,38 @@ function openDetail(id) {
     html += '<div class="cb-vals" style="color:' + valCol + '">$' + Math.round(cat.s).toLocaleString() + '/$' + Math.round(cat.b).toLocaleString() + '</div>';
     html += '</div>';
   });
+  html += '</div>';
+
+  // Budget Plan (coach-only split view)
+  var p = c.pcts || {fixed:0,wants:0,savings:0,debt:0};
+  var inc = c.budget;
+  html += '<div class="sec-title">Budget Plan</div>';
+  html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px">';
+  // Stacked bar
+  html += '<div style="display:flex;gap:2px;height:10px;border-radius:5px;overflow:hidden;margin-bottom:14px">';
+  html += '<div style="width:' + p.fixed + '%;background:#C97A2A" title="Fixed ' + p.fixed + '%"></div>';
+  html += '<div style="width:' + p.wants + '%;background:#C8B48A" title="Wants ' + p.wants + '%"></div>';
+  html += '<div style="width:' + p.savings + '%;background:#2D7A4A" title="Savings ' + p.savings + '%"></div>';
+  html += '<div style="width:' + p.debt + '%;background:#8B1A1A" title="Debt ' + p.debt + '%"></div>';
+  html += '</div>';
+  // Legend row
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">';
+  var splits = [
+    { label:'Fixed',   pct:p.fixed,   col:'#C97A2A' },
+    { label:'Wants',   pct:p.wants,   col:'#C8B48A' },
+    { label:'Savings', pct:p.savings, col:'#2D7A4A' },
+    { label:'Debt',    pct:p.debt,    col:'#8B1A1A' },
+  ];
+  splits.forEach(function(s) {
+    var dolAmt = Math.round((s.pct / 100) * inc);
+    html += '<div style="text-align:center">';
+    html += '<div style="width:10px;height:10px;border-radius:50%;background:' + s.col + ';margin:0 auto 4px"></div>';
+    html += '<div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted)">' + s.label + '</div>';
+    html += '<div style="font-size:16px;font-weight:700;color:var(--white);line-height:1.2">' + s.pct + '%</div>';
+    html += '<div style="font-size:10px;color:' + s.col + ';font-weight:500">$' + dolAmt.toLocaleString() + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
   html += '</div>';
 
   // Activity

@@ -965,9 +965,15 @@ app.get('/api/coach/clients', requireCoach, (req, res) => {
       cats: [
         { n:'Fixed',   s: spentBycat.fixed,   b: budgetByCat.fixed,   c:'#C97A2A' },
         { n:'Wants',   s: spentBycat.wants,   b: budgetByCat.wants,   c:'#C8B48A' },
-        { n:'Savings', s: spentBycat.savings, b: budgetByCat.savings, c:'#1A5C2E' },
+        { n:'Savings', s: spentBycat.savings, b: budgetByCat.savings, c:'#2D7A4A' },
         { n:'Debt',    s: spentBycat.debt,    b: budgetByCat.debt,    c:'#8B1A1A' },
       ],
+      pcts: {
+        fixed:   budget.fixed_pct   || 0,
+        wants:   budget.wants_pct   || 0,
+        savings: budget.savings_pct || 0,
+        debt:    budget.debt_pct    || 0,
+      },
       activity: recentActivity,
       notes,
       topDebt,
@@ -979,8 +985,9 @@ app.get('/api/coach/clients', requireCoach, (req, res) => {
       unread:false, unread_count:0, last_active:null,
       cats:[
         {n:'Fixed',s:0,b:0,c:'#C97A2A'},{n:'Wants',s:0,b:0,c:'#C8B48A'},
-        {n:'Savings',s:0,b:0,c:'#1A5C2E'},{n:'Debt',s:0,b:0,c:'#8B1A1A'},
+        {n:'Savings',s:0,b:0,c:'#2D7A4A'},{n:'Debt',s:0,b:0,c:'#8B1A1A'},
       ],
+      pcts:{ fixed:0, wants:0, savings:0, debt:0 },
       activity:[], notes:[], topDebt:null,
     };
    }
