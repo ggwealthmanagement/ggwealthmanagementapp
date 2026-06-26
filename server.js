@@ -1024,16 +1024,43 @@ app.delete('/api/coach/clients/:id', requireCoach, (req, res) => {
 app.delete('/api/coach/clients/:id/reset-month', requireCoach, (req, res) => {
   const clientId = parseInt(req.params.id);
   const thisMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-  // Delete expenses logged this month
-  db.prepare(`DELETE FROM expenses WHERE client_id = ? AND strftime('%Y-%m', created_at) = ?`).run(clientId, thisMonth);
-  // Delete debt payment history logged this month
-  db.prepare(`DELETE FROM debt_payments WHERE client_id = ? AND strftime('%Y-%m', paid_at) = ?`).run(clientId, thisMonth);
-  // Reset debt paid amounts to zero (start fresh)
-  db.prepare(`UPDATE debts SET paid = 0, paid_off = 0 WHERE client_id = ?`).run(clientId);
-  // Reset fixed bills to unpaid
-  db.prepare(`UPDATE fixed_expenses SET is_paid = 0, paid_month = NULL WHERE client_id = ?`).run(clientId);
-  // Reset savings goal current amounts to zero
-  db.prepare(`UPDATE savings_goals SET current_amount = 0 WHERE client_id = ?`).run(clientId);
+
+  // 1. Snapshot savings expenses before deleting so we can reverse goal balances
+  const savingsExps = db.prepare(
+    `SELECT amount, goal_id FROM expenses WHERE client_id=? AND category='savings' AND strftime('%Y-%m', created_at)=?`
+  ).all(clientId, thisMonth);
+
+  // 2. Delete this month's expenses (clears ring spending for all categories)
+  db.prepare(`DELETE FROM expenses WHERE client_id=? AND strftime('%Y-%m', created_at)=?`).run(clientId, thisMonth);
+
+  // 3. Delete this month's debt payment records
+  db.prepare(`DELETE FROM debt_payments WHERE client_id=? AND strftime('%Y-%m', paid_at)=?`).run(clientId, thisMonth);
+
+  // 4. Recalculate debts.paid from whatever payment history remains (safe across months)
+  db.prepare(`
+    UPDATE debts SET
+      paid = COALESCE((SELECT SUM(dp.amount) FROM debt_payments dp WHERE dp.debt_id=debts.id AND dp.client_id=?), 0),
+      paid_off = CASE WHEN COALESCE((SELECT SUM(dp.amount) FROM debt_payments dp WHERE dp.debt_id=debts.id AND dp.client_id=?), 0) >= balance THEN 1 ELSE 0 END
+    WHERE client_id=?
+  `).run(clientId, clientId, clientId);
+
+  // 5. Reverse savings goal balances for each deleted expense
+  const goals = db.prepare(`SELECT * FROM savings_goals WHERE client_id=?`).all(clientId);
+  savingsExps.forEach(e => {
+    if (e.goal_id) {
+      db.prepare(`UPDATE savings_goals SET current_amount=MAX(0,current_amount-?), complete=0 WHERE id=? AND client_id=?`)
+        .run(e.amount, e.goal_id, clientId);
+    } else {
+      // No linked goal — reduce emergency fund first, then first goal
+      const match = goals.find(g => g.is_emergency) || goals[0];
+      if (match) db.prepare(`UPDATE savings_goals SET current_amount=MAX(0,current_amount-?), complete=0 WHERE id=?`)
+        .run(e.amount, match.id);
+    }
+  });
+
+  // 6. Reset fixed bills to unpaid for the new month
+  db.prepare(`UPDATE fixed_expenses SET is_paid=0, paid_month=NULL WHERE client_id=?`).run(clientId);
+
   res.json({ ok: true, message: 'Client month data reset' });
 });
 
