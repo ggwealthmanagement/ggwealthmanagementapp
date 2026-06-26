@@ -912,7 +912,8 @@ function openBudgetModal() {
        </div>
        <div id="bm-warning" style="font-size:11px;color:#FF3B30;text-align:center;margin-bottom:12px;min-height:16px"></div>
        <button class="modal-btn" onclick="saveBudgetSplit()">Save Budget</button>
-       <button onclick="resetBudgetPlan()" style="width:100%;margin-top:10px;padding:12px;background:transparent;border:1px solid rgba(201,168,76,0.2);border-radius:12px;color:var(--muted);font-family:Inter,sans-serif;font-size:11px;font-weight:500;letter-spacing:0.06em;cursor:pointer">Reset Budget Plan</button>`;
+       <button onclick="resetBudgetPlan()" style="width:100%;margin-top:10px;padding:12px;background:transparent;border:1px solid rgba(201,168,76,0.2);border-radius:12px;color:var(--muted);font-family:Inter,sans-serif;font-size:11px;font-weight:500;letter-spacing:0.06em;cursor:pointer">Reset Budget Plan to Zero</button>
+       <button onclick="clearClientSpending()" style="width:100%;margin-top:8px;padding:12px;background:transparent;border:1px solid rgba(224,85,85,0.25);border-radius:12px;color:rgba(224,85,85,0.7);font-family:Inter,sans-serif;font-size:11px;font-weight:500;letter-spacing:0.06em;cursor:pointer">🗑 Clear This Month's Spending</button>`;
     cats.forEach(c => {
       document.getElementById('bm-' + c.id).value = c.val > 0 ? c.val.toFixed(0) : '';
     });
@@ -982,6 +983,15 @@ async function resetBudgetPlan() {
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ ..._budget, fixed_pct:0, wants_pct:0, savings_pct:0, debt_pct:0 })
   });
+  document.getElementById('budget-modal').classList.remove('open');
+  init();
+}
+
+async function clearClientSpending() {
+  if (!window._coachMode) return; // coach only
+  const name = window._coachClientName ? window._coachClientName.split(' ')[0] : 'this client';
+  if (!confirm('Clear all of ' + name + '\'s spending, debt payments, and savings logs for this month? This cannot be undone.')) return;
+  await fetch('/api/coach/clients/' + window._coachClientId + '/reset-month', { method: 'DELETE' });
   document.getElementById('budget-modal').classList.remove('open');
   init();
 }
