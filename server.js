@@ -201,7 +201,8 @@ try {
   add('users',    'last_active',   'TEXT');
   add('budget',   'income_amount', 'REAL');
   add('budget',   'income_frequency', "TEXT NOT NULL DEFAULT 'weekly'");
-  add('debts',    'interest_rate', 'REAL NOT NULL DEFAULT 0');
+  add('debts',    'interest_rate',  'REAL NOT NULL DEFAULT 0');
+  add('debt_payments', 'expense_id', 'INTEGER');
 })();
 
 // One-time cleanup: remove expenses that were auto-posted when marking fixed bills as paid
@@ -676,10 +677,11 @@ app.post('/api/debts/:id/payments', requireAuth, (req, res) => {
   const newPaid  = Math.min(existing.balance, existing.paid + amount);
   const paidOff  = newPaid >= existing.balance ? 1 : 0;
   db.prepare('UPDATE debts SET paid = ?, paid_off = ? WHERE id = ? AND client_id = ?').run(newPaid, paidOff, req.params.id, clientId);
-  db.prepare('INSERT INTO debt_payments (debt_id, client_id, amount, payment_type) VALUES (?,?,?,?)').run(req.params.id, clientId, amount, payment_type);
   // Auto-log as expense so home-page ring tracks debt spending
-  db.prepare(`INSERT INTO expenses (client_id, description, amount, category, debt_id) VALUES (?,?,?,'debt',?)`)
+  const expResult = db.prepare(`INSERT INTO expenses (client_id, description, amount, category, debt_id) VALUES (?,?,?,'debt',?)`)
     .run(clientId, existing.name + ' payment', amount, parseInt(req.params.id));
+  // Store expense_id so undo can delete the exact record (no date-guessing)
+  db.prepare('INSERT INTO debt_payments (debt_id, client_id, amount, payment_type, expense_id) VALUES (?,?,?,?,?)').run(req.params.id, clientId, amount, payment_type, expResult.lastInsertRowid);
   res.json({ ok: true, paid_off: !!paidOff, new_paid: newPaid });
 });
 
@@ -701,12 +703,16 @@ app.delete('/api/debt_payments/:id', requireAuth, (req, res) => {
   const paidOff = newPaid >= debt.balance ? 1 : 0;
   db.prepare('UPDATE debts SET paid = ?, paid_off = ? WHERE id = ?').run(newPaid, paidOff, payment.debt_id);
   db.prepare('DELETE FROM debt_payments WHERE id = ?').run(req.params.id);
-  // Also remove the auto-created expense entry for this payment
-  const payDate = (payment.paid_at || '').slice(0, 10);
-  db.prepare(`DELETE FROM expenses WHERE id = (
-    SELECT id FROM expenses WHERE client_id=? AND debt_id=? AND category='debt' AND amount=?
-    AND date(created_at) = ? ORDER BY created_at DESC LIMIT 1
-  )`).run(clientId, payment.debt_id, payment.amount, payDate);
+  // Remove the linked expense — use stored expense_id when available (new payments),
+  // fall back to fuzzy match for older records that predate the expense_id column
+  if (payment.expense_id) {
+    db.prepare(`DELETE FROM expenses WHERE id = ? AND client_id = ?`).run(payment.expense_id, clientId);
+  } else {
+    db.prepare(`DELETE FROM expenses WHERE id = (
+      SELECT id FROM expenses WHERE client_id=? AND debt_id=? AND category='debt' AND ABS(amount-?)<0.01
+      ORDER BY created_at DESC LIMIT 1
+    )`).run(clientId, payment.debt_id, payment.amount);
+  }
   res.json({ ok: true });
 });
 
