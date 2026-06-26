@@ -799,12 +799,16 @@ async function submitPayment() {
   _submitting = true;
   const submitBtn = document.querySelector('#pay-sheet .save-btn');
   if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving…'; }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
   try {
     const payAmt = psPayType === 'extra' ? (d.min||0) + raw : raw;
     const res    = await fetch(`/api/debts/${d.id}/payments`, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ amount: payAmt, payment_type: psPayType })
+      body: JSON.stringify({ amount: payAmt, payment_type: psPayType }),
+      signal: controller.signal
     });
+    clearTimeout(timeout);
     if (!res.ok) throw new Error('Server error ' + res.status);
     const result = await res.json();
     closePS();
@@ -814,7 +818,8 @@ async function submitPayment() {
     }
     await loadDebts();
   } catch(err) {
-    hintEl.textContent = '⚠ Could not save payment. Try again.';
+    clearTimeout(timeout);
+    hintEl.textContent = err.name === 'AbortError' ? '⚠ Timed out — check your connection.' : '⚠ Could not save payment. Try again.';
     hintEl.className   = 'ps-hint error';
     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Log Payment'; }
   } finally {

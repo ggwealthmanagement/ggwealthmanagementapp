@@ -728,8 +728,6 @@ async function init() {
   const spent = { fixed: paidBillsTotal, wants:0, savings:0, debt:0 };
   // Other categories from expense log (savings deposits + debt payments auto-logged there)
   monthExpenses.forEach(e => { if (e.category !== 'fixed' && spent[e.category] != null) spent[e.category] += e.amount; });
-  const totalSpent = Object.values(spent).reduce((a,b)=>a+b, 0);
-
   // Budget allocation — use actual paychecks received if entered, else fall back to planned
   const incomeBase = receivedTotal > 0 ? receivedTotal : monthlyProjected;
   _incomeBase = incomeBase; // share with budget edit modal
@@ -739,7 +737,12 @@ async function init() {
     savings: (budget.savings_pct / 100) * incomeBase,
     debt:    (budget.debt_pct    / 100) * incomeBase,
   };
-  const totalAlloc = incomeBase;
+
+  // Only count categories that have a budget set (alloc > 0) in ring totals
+  // Unbudgeted categories are tracked but don't affect the remaining calculation
+  const cats = ['fixed','wants','savings','debt'];
+  const totalAlloc = cats.reduce((s,k) => s + (alloc[k] > 0 ? alloc[k] : 0), 0);
+  const totalSpent = cats.reduce((s,k) => s + (alloc[k] > 0 ? spent[k] : 0), 0);
 
   // Update ring SVG
   const RADII  = { debt:96, savings:76, wants:56, fixed:36 };
@@ -780,20 +783,24 @@ async function init() {
   catDefs.forEach((def, i) => {
     const row = catRows[i]; if (!row) return;
     const s = spent[def.key], b = alloc[def.key];
-    const pct = b > 0 ? Math.min(100, (s/b)*100) : 0;
+    const budgeted = b > 0;
+    const pct = budgeted ? Math.min(100, (s/b)*100) : 0;
     const left = b - s;
-    const isRowOver = left < -0.5;          // truly over budget
-    const isRowDone = !isRowOver && b > 0 && Math.abs(left) < 0.5; // at exactly budget (float-safe)
+    const isRowOver = budgeted && left < -0.5;
+    const isRowDone = budgeted && !isRowOver && Math.abs(left) < 0.5;
     row.querySelector('.cat-name').textContent = def.name;
-    row.querySelector('.cat-amts').innerHTML = `<span class="sp">$${s.toFixed(0)}</span> / $${b.toFixed(0)}`;
+    row.querySelector('.cat-amts').innerHTML = budgeted
+      ? `<span class="sp">$${s.toFixed(0)}</span> / $${b.toFixed(0)}`
+      : `<span class="sp">$${s.toFixed(0)}</span> <span style="color:var(--muted);font-size:9px">unbudgeted</span>`;
     const fill = row.querySelector('.bar-fill');
-    fill.style.width = pct + '%';
+    fill.style.width = budgeted ? pct + '%' : '0%';
     fill.classList.toggle('over', isRowOver);
     const st = row.querySelector('.cat-status');
-    st.textContent = isRowOver ? '$'+Math.round(Math.abs(left))+' over!'
-                   : isRowDone ? '✓ Done'
+    st.textContent = !budgeted    ? '—'
+                   : isRowOver   ? '$'+Math.round(Math.abs(left))+' over!'
+                   : isRowDone   ? '✓ Done'
                    : '$'+Math.round(left)+' left';
-    st.className = 'cat-status ' + (isRowOver ? 'over' : isRowDone ? 'ok' : pct >= 80 ? 'warn' : 'ok');
+    st.className = 'cat-status ' + (isRowOver ? 'over' : isRowDone ? 'ok' : !budgeted ? 'warn' : pct >= 80 ? 'warn' : 'ok');
   });
 
   // Monthly Bills card
