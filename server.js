@@ -1056,6 +1056,18 @@ app.put('/api/change-password', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// Self-reset: client wipes their own current-month data
+app.delete('/api/reset-month', requireAuth, (req, res) => {
+  const clientId = getClientId(req);
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  db.prepare(`DELETE FROM expenses WHERE client_id = ? AND strftime('%Y-%m', created_at) = ?`).run(clientId, thisMonth);
+  db.prepare(`DELETE FROM debt_payments WHERE client_id = ? AND strftime('%Y-%m', paid_at) = ?`).run(clientId, thisMonth);
+  db.prepare(`UPDATE debts SET paid = 0, paid_off = 0 WHERE client_id = ?`).run(clientId);
+  db.prepare(`UPDATE fixed_expenses SET is_paid = 0, paid_month = NULL WHERE client_id = ?`).run(clientId);
+  db.prepare(`UPDATE savings_goals SET current_amount = 0 WHERE client_id = ?`).run(clientId);
+  res.json({ ok: true });
+});
+
 // ─── Summary / analytics ──────────────────────────────────────────────────────
 app.get('/api/summary', requireAuth, (req, res) => {
   const clientId = getClientId(req);
