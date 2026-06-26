@@ -514,7 +514,7 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title">Edit Budget Split</div>
-    <div class="modal-sub">Set your weekly budget for each category</div>
+    <div class="modal-sub">Set your monthly budget for each category</div>
 
     <div id="bm-rows" style="display:flex;flex-direction:column;gap:14px;margin-bottom:20px">
       <div class="bm-row">
@@ -655,7 +655,7 @@
 
 <script>
 // ── State ──
-var _budget = {}, _income = 0;
+var _budget = {}, _income = 0, _incomeBase = 0;
 
 // ── Auth guard ──
 async function init() {
@@ -731,6 +731,7 @@ async function init() {
 
   // Budget allocation — use actual paychecks received if entered, else fall back to planned
   const incomeBase = receivedTotal > 0 ? receivedTotal : monthlyProjected;
+  _incomeBase = incomeBase; // share with budget edit modal
   const alloc = {
     fixed:   (budget.fixed_pct   / 100) * incomeBase,
     wants:   (budget.wants_pct   / 100) * incomeBase,
@@ -893,11 +894,12 @@ async function deletePaycheck(id) {
 
 // ── Budget edit modal ──
 function openBudgetModal() {
+  const base = _incomeBase > 0 ? _incomeBase : _income;
   const alloc = {
-    fixed:   ((_budget.fixed_pct   || 0) / 100) * _income,
-    wants:   ((_budget.wants_pct   || 0) / 100) * _income,
-    savings: ((_budget.savings_pct || 0) / 100) * _income,
-    debt:    ((_budget.debt_pct    || 0) / 100) * _income,
+    fixed:   ((_budget.fixed_pct   || 0) / 100) * base,
+    wants:   ((_budget.wants_pct   || 0) / 100) * base,
+    savings: ((_budget.savings_pct || 0) / 100) * base,
+    debt:    ((_budget.debt_pct    || 0) / 100) * base,
   };
   document.getElementById('bm-fixed').value   = alloc.fixed   > 0 ? alloc.fixed.toFixed(0)   : '';
   document.getElementById('bm-wants').value   = alloc.wants   > 0 ? alloc.wants.toFixed(0)   : '';
@@ -913,10 +915,11 @@ function updateBudgetTotal() {
   const total = vals.reduce((a,b) => a+b, 0);
   const totalEl = document.getElementById('bm-total');
   const warnEl  = document.getElementById('bm-warning');
-  totalEl.textContent = '$' + total.toFixed(0) + (_income > 0 ? ' of $' + _income.toFixed(0) : '');
-  const over = _income > 0 && total > _income;
+  const base = _incomeBase > 0 ? _incomeBase : _income;
+  totalEl.textContent = '$' + total.toFixed(0) + (base > 0 ? ' of $' + base.toFixed(0) : '');
+  const over = base > 0 && total > base;
   totalEl.style.color = over ? '#FF3B30' : 'var(--gold)';
-  warnEl.textContent  = over ? '⚠ Total exceeds your income by $' + (total - _income).toFixed(0) : '';
+  warnEl.textContent  = over ? '⚠ Total exceeds your income by $' + (total - base).toFixed(0) : '';
 }
 
 async function saveBudgetSplit() {
@@ -924,7 +927,7 @@ async function saveBudgetSplit() {
   const w = parseFloat(document.getElementById('bm-wants').value)   || 0;
   const s = parseFloat(document.getElementById('bm-savings').value) || 0;
   const d = parseFloat(document.getElementById('bm-debt').value)    || 0;
-  const base = _income > 0 ? _income : (f + w + s + d) || 1;
+  const base = (_incomeBase > 0 ? _incomeBase : _income) || (f + w + s + d) || 1;
   await fetch('/api/budget', {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
