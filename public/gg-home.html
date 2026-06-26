@@ -113,6 +113,7 @@
   }
   .rc-remain { font-size: 28px; font-weight: 700; color: #F0EDE8; letter-spacing: -0.03em; line-height: 1; text-shadow: 0 0 18px rgba(240,237,232,0.25); }
   .rc-remain.over { color: #FF2D2D; text-shadow: 0 0 22px rgba(255,45,45,0.7); }
+  .rc-remain.done { color: rgba(240,237,232,0.38); text-shadow: none; }
   .rc-amount { font-size: 12px; font-weight: 600; color: #F0EDE8; margin-top: 5px; letter-spacing: 0.01em; }
   .rc-label  { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(240,237,232,0.38); margin-top: 2px; }
 
@@ -756,9 +757,15 @@ async function init() {
   // Ring center
   const remaining = totalAlloc - totalSpent;
   const isOver    = remaining < 0;
+  const isDone    = Math.abs(remaining) < 1 && !isOver; // within $1 = complete
   const remEl = document.querySelector('.rc-remain');
-  remEl.textContent = (isOver ? '-$' : '$') + Math.abs(remaining).toLocaleString('en-US',{maximumFractionDigits:0}) + (isOver ? ' over' : ' left');
+  if (isDone) {
+    remEl.textContent = 'Complete';
+  } else {
+    remEl.textContent = (isOver ? '-$' : '$') + Math.abs(remaining).toLocaleString('en-US',{maximumFractionDigits:0}) + (isOver ? ' over' : ' left');
+  }
   remEl.classList.toggle('over', isOver);
+  remEl.classList.toggle('done', isDone);
   document.querySelector('.rc-amount').textContent = '$' + totalSpent.toLocaleString('en-US',{maximumFractionDigits:0}) + ' spent';
   document.querySelector('.rc-label').textContent  = 'of $' + totalAlloc.toLocaleString('en-US',{maximumFractionDigits:0}) + (receivedTotal > 0 ? ' actual' : ' planned');
 
