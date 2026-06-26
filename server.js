@@ -681,8 +681,8 @@ app.post('/api/debts/:id/payments', requireAuth, (req, res) => {
   const expResult = db.prepare(`INSERT INTO expenses (client_id, description, amount, category, debt_id) VALUES (?,?,?,'debt',?)`)
     .run(clientId, existing.name + ' payment', amount, parseInt(req.params.id));
   // Store expense_id so undo can delete the exact record (no date-guessing)
-  db.prepare('INSERT INTO debt_payments (debt_id, client_id, amount, payment_type, expense_id) VALUES (?,?,?,?,?)').run(req.params.id, clientId, amount, payment_type, expResult.lastInsertRowid);
-  res.json({ ok: true, paid_off: !!paidOff, new_paid: newPaid });
+  const payResult = db.prepare('INSERT INTO debt_payments (debt_id, client_id, amount, payment_type, expense_id) VALUES (?,?,?,?,?)').run(req.params.id, clientId, amount, payment_type, expResult.lastInsertRowid);
+  res.json({ ok: true, paid_off: !!paidOff, new_paid: newPaid, paymentId: payResult.lastInsertRowid });
 });
 
 // Get payment history for a debt
@@ -1058,8 +1058,8 @@ app.delete('/api/coach/clients/:id/reset-month', requireCoach, (req, res) => {
     }
   });
 
-  // 6. Reset fixed bills to unpaid for the new month
-  db.prepare(`UPDATE fixed_expenses SET is_paid=0, paid_month=NULL WHERE client_id=?`).run(clientId);
+  // 6. Reset fixed bills to unpaid for the new month (is_paid is computed, not stored)
+  db.prepare(`UPDATE fixed_expenses SET paid=0, paid_month=NULL WHERE client_id=?`).run(clientId);
 
   res.json({ ok: true, message: 'Client month data reset' });
 });
@@ -1103,7 +1103,7 @@ app.delete('/api/reset-month', requireAuth, (req, res) => {
   db.prepare(`DELETE FROM expenses WHERE client_id = ? AND strftime('%Y-%m', created_at) = ?`).run(clientId, thisMonth);
   db.prepare(`DELETE FROM debt_payments WHERE client_id = ? AND strftime('%Y-%m', paid_at) = ?`).run(clientId, thisMonth);
   db.prepare(`UPDATE debts SET paid = 0, paid_off = 0 WHERE client_id = ?`).run(clientId);
-  db.prepare(`UPDATE fixed_expenses SET is_paid = 0, paid_month = NULL WHERE client_id = ?`).run(clientId);
+  db.prepare(`UPDATE fixed_expenses SET paid=0, paid_month=NULL WHERE client_id=?`).run(clientId);
   db.prepare(`UPDATE savings_goals SET current_amount = 0 WHERE client_id = ?`).run(clientId);
   res.json({ ok: true });
 });
