@@ -1037,6 +1037,13 @@ app.delete('/api/coach/clients/:id/reset-month', requireCoach, (req, res) => {
   res.json({ ok: true, message: 'Client month data reset' });
 });
 
+// Reset a client's budget plan to zero (keeps all transactions)
+app.put('/api/coach/clients/:id/reset-budget', requireCoach, (req, res) => {
+  const clientId = parseInt(req.params.id);
+  db.prepare(`UPDATE budget SET fixed_pct=0, wants_pct=0, savings_pct=0, debt_pct=0 WHERE client_id=?`).run(clientId);
+  res.json({ ok: true });
+});
+
 // Reset a client's password (coach only)
 app.put('/api/coach/clients/:id/password', requireCoach, (req, res) => {
   const { password } = req.body;

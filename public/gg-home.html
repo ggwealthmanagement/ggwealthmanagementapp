@@ -510,44 +510,9 @@
 
 </div>
 
-<!-- Budget Edit Modal -->
+<!-- Budget Modal (content rendered dynamically based on coach vs client) -->
 <div class="modal-overlay" id="budget-modal" onclick="if(event.target===this)this.classList.remove('open')">
-  <div class="modal">
-    <div class="modal-handle"></div>
-    <div class="modal-title">Edit Budget Split</div>
-    <div class="modal-sub">Set your monthly budget for each category</div>
-
-    <div id="bm-rows" style="display:flex;flex-direction:column;gap:14px;margin-bottom:20px">
-      <div class="bm-row">
-        <div class="bm-dot" style="background:#C97A2A"></div>
-        <span class="bm-label">Fixed</span>
-        <div class="bm-input-wrap"><span class="bm-dollar">$</span><input class="bm-input" type="number" id="bm-fixed" placeholder="0" oninput="updateBudgetTotal()"/></div>
-      </div>
-      <div class="bm-row">
-        <div class="bm-dot" style="background:#C8B48A"></div>
-        <span class="bm-label">Wants</span>
-        <div class="bm-input-wrap"><span class="bm-dollar">$</span><input class="bm-input" type="number" id="bm-wants" placeholder="0" oninput="updateBudgetTotal()"/></div>
-      </div>
-      <div class="bm-row">
-        <div class="bm-dot" style="background:#1A5C2E"></div>
-        <span class="bm-label">Savings</span>
-        <div class="bm-input-wrap"><span class="bm-dollar">$</span><input class="bm-input" type="number" id="bm-savings" placeholder="0" oninput="updateBudgetTotal()"/></div>
-      </div>
-      <div class="bm-row">
-        <div class="bm-dot" style="background:#8B1A1A"></div>
-        <span class="bm-label">Debt</span>
-        <div class="bm-input-wrap"><span class="bm-dollar">$</span><input class="bm-input" type="number" id="bm-debt" placeholder="0" oninput="updateBudgetTotal()"/></div>
-      </div>
-    </div>
-
-    <div id="bm-total-bar" style="background:#0E0E0E;border-radius:8px;padding:12px 16px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center">
-      <span style="font-size:11px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase">Total Budgeted</span>
-      <span id="bm-total" style="font-size:15px;font-weight:700;color:var(--gold)">$0</span>
-    </div>
-    <div id="bm-warning" style="font-size:11px;color:#FF3B30;text-align:center;margin-bottom:12px;min-height:16px"></div>
-
-    <button class="modal-btn" onclick="saveBudgetSplit()">Save Budget</button>
-  </div>
+  <div class="modal" id="budget-modal-inner"></div>
 </div>
 
 <style>
@@ -910,7 +875,7 @@ async function deletePaycheck(id) {
   init();
 }
 
-// ── Budget edit modal ──
+// ── Budget modal — coach sees editable inputs, client sees read-only ──
 function openBudgetModal() {
   const base = _incomeBase > 0 ? _incomeBase : _income;
   const alloc = {
@@ -919,11 +884,60 @@ function openBudgetModal() {
     savings: ((_budget.savings_pct || 0) / 100) * base,
     debt:    ((_budget.debt_pct    || 0) / 100) * base,
   };
-  document.getElementById('bm-fixed').value   = alloc.fixed   > 0 ? alloc.fixed.toFixed(0)   : '';
-  document.getElementById('bm-wants').value   = alloc.wants   > 0 ? alloc.wants.toFixed(0)   : '';
-  document.getElementById('bm-savings').value = alloc.savings > 0 ? alloc.savings.toFixed(0) : '';
-  document.getElementById('bm-debt').value    = alloc.debt    > 0 ? alloc.debt.toFixed(0)    : '';
-  updateBudgetTotal();
+  const inner = document.getElementById('budget-modal-inner');
+  const cats = [
+    { id:'fixed',   label:'Fixed',   color:'#C97A2A', val: alloc.fixed   },
+    { id:'wants',   label:'Wants',   color:'#C8B48A', val: alloc.wants   },
+    { id:'savings', label:'Savings', color:'#1A5C2E', val: alloc.savings },
+    { id:'debt',    label:'Debt',    color:'#8B1A1A', val: alloc.debt    },
+  ];
+
+  if (window._coachMode) {
+    // ── Coach: editable ──
+    const rows = cats.map(c =>
+      `<div class="bm-row">
+        <div class="bm-dot" style="background:${c.color}"></div>
+        <span class="bm-label">${c.label}</span>
+        <div class="bm-input-wrap"><span class="bm-dollar">$</span><input class="bm-input" type="number" id="bm-${c.id}" placeholder="0" inputmode="decimal" oninput="updateBudgetTotal()"/></div>
+      </div>`
+    ).join('');
+    inner.innerHTML =
+      `<div class="modal-handle"></div>
+       <div class="modal-title">Edit Budget Split</div>
+       <div class="modal-sub">Set monthly budget for each category</div>
+       <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:20px">${rows}</div>
+       <div style="background:#0E0E0E;border-radius:8px;padding:12px 16px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center">
+         <span style="font-size:11px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase">Total Budgeted</span>
+         <span id="bm-total" style="font-size:15px;font-weight:700;color:var(--gold)">$0</span>
+       </div>
+       <div id="bm-warning" style="font-size:11px;color:#FF3B30;text-align:center;margin-bottom:12px;min-height:16px"></div>
+       <button class="modal-btn" onclick="saveBudgetSplit()">Save Budget</button>
+       <button onclick="resetBudgetPlan()" style="width:100%;margin-top:10px;padding:12px;background:transparent;border:1px solid rgba(201,168,76,0.2);border-radius:12px;color:var(--muted);font-family:Inter,sans-serif;font-size:11px;font-weight:500;letter-spacing:0.06em;cursor:pointer">Reset Budget Plan</button>`;
+    cats.forEach(c => {
+      document.getElementById('bm-' + c.id).value = c.val > 0 ? c.val.toFixed(0) : '';
+    });
+    updateBudgetTotal();
+  } else {
+    // ── Client: read-only view ──
+    const rows = cats.map(c =>
+      `<div class="bm-row" style="grid-template-columns:14px 80px 1fr">
+        <div class="bm-dot" style="background:${c.color}"></div>
+        <span class="bm-label">${c.label}</span>
+        <span style="text-align:right;font-size:15px;font-weight:600;color:var(--white)">$${Math.round(c.val).toLocaleString()}</span>
+      </div>`
+    ).join('');
+    const total = cats.reduce((s, c) => s + c.val, 0);
+    inner.innerHTML =
+      `<div class="modal-handle"></div>
+       <div class="modal-title">Your Budget Plan</div>
+       <div class="modal-sub" style="margin-bottom:24px">Set by your coach · view only</div>
+       <div style="display:flex;flex-direction:column;gap:16px;margin-bottom:24px">${rows}</div>
+       <div style="background:#0E0E0E;border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center">
+         <span style="font-size:11px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase">Total Planned</span>
+         <span style="font-size:15px;font-weight:700;color:var(--gold)">$${Math.round(total).toLocaleString()}</span>
+       </div>`;
+  }
+
   document.getElementById('budget-modal').classList.add('open');
 }
 
@@ -956,6 +970,17 @@ async function saveBudgetSplit() {
       savings_pct: (s / base) * 100,
       debt_pct:    (d / base) * 100,
     })
+  });
+  document.getElementById('budget-modal').classList.remove('open');
+  init();
+}
+
+async function resetBudgetPlan() {
+  if (!confirm('Reset the budget plan to zero? Logged transactions are not affected.')) return;
+  await fetch('/api/budget', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ ..._budget, fixed_pct:0, wants_pct:0, savings_pct:0, debt_pct:0 })
   });
   document.getElementById('budget-modal').classList.remove('open');
   init();
